@@ -58,6 +58,7 @@ with gr.Blocks(title="Teckenigenkänning") as demo:
             label="Rita tecken här",
             type="pil",
             image_mode="L",
+            sources=(),
             brush=gr.Brush(colors=["#000000"], default_size=20),
             eraser=gr.Eraser(default_size=20),
             height=400,
@@ -65,8 +66,13 @@ with gr.Blocks(title="Teckenigenkänning") as demo:
         )
 
         with gr.Column():
-            preview = gr.Image(label="Sparad 28x28-bild")
-            result = gr.Textbox(label="Resultat från modell")
+            preview = gr.Image(
+                label="Sparad 28x28-bild",
+                height=80,
+                type="pil")
+            
+            result = gr.Textbox(
+                label="Resultat från modell")
 
     btn = gr.Button("Tolka tecken")
     btn.click(
