@@ -31,4 +31,6 @@ def images_to_csv(folder_path, output_csv='letters.csv', img_size=28):
     print(f"Saved {len(df)} images to {output_csv}")
     
 
-images_to_csv('path/to/your/letters_folder')
+#
+#images_to_csv("PNGs")
+#
