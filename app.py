@@ -7,6 +7,12 @@ from datetime import datetime
 SAVE_DIR = Path("saved_drawings")
 SAVE_DIR.mkdir(exist_ok=True)
 
+def reset_canvas(): # Den här funktionen nollställer canvas, behövs för att vi ska börja med penseln. 
+    return {
+        "background": Image.new("L", (400, 400), 0), # Skapar en svart bakgrund
+        "layers": [],
+        "composite": None
+    }
 
 def prepare_image(editor_value):
     """
@@ -53,16 +59,25 @@ with gr.Blocks(title="Teckenigenkänning") as demo:
     gr.Markdown("# Teckenigenkänning")
     gr.Markdown("Rita ett tecken i rutan och klicka på **Tolka tecken**.")
 
-    with gr.Row():
+    with gr.Row(): # Lagt till så att vi börjar med penseln direkt
         sketchpad = gr.ImageEditor(
             label="Rita tecken här",
             type="pil",
             image_mode="L",
             sources=(),
-            brush=gr.Brush(colors=["#000000"], default_size=20),
+            interactive=True,
+            brush=gr.Brush( # Ställer in penseln
+                colors=["#FFFFFF"],
+                default_color="#FFFFFF",
+                color_mode="fixed",
+                default_size=20
+            ),
             eraser=gr.Eraser(default_size=20),
             height=400,
             width=400,
+            canvas_size=(400, 400),
+            layers=False,
+            value=reset_canvas()
         )
 
         with gr.Column():
@@ -75,6 +90,12 @@ with gr.Blocks(title="Teckenigenkänning") as demo:
                 label="Resultat från modell")
 
     btn = gr.Button("Tolka tecken")
+
+    sketchpad.clear( # Kallar på clear
+        fn=reset_canvas,
+        outputs=sketchpad
+    )
+    
     btn.click(
         fn=prepare_image,
         inputs=sketchpad,
