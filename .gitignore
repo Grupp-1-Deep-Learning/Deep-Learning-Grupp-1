@@ -17,8 +17,7 @@ __pycache__/
 # Dataset
 *.csv
 
-# Trained models (valfritt)
-*.joblib
+
 
 # Jupyter
 .ipynb_checkpoints/
