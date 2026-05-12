@@ -1,11 +1,17 @@
 import gradio as gr
 import numpy as np
+import joblib
 from PIL import Image
 from pathlib import Path
 from datetime import datetime
 
 SAVE_DIR = Path("saved_drawings")
 SAVE_DIR.mkdir(exist_ok=True)
+
+RF_MODEL_PATH = Path("trained_models/random_forest_mnist.joblib")
+random_forest_model = joblib.load(RF_MODEL_PATH)
+
+
 
 def reset_canvas(): # Den här funktionen nollställer canvas, behövs för att vi ska börja med penseln. 
     return {
@@ -14,11 +20,11 @@ def reset_canvas(): # Den här funktionen nollställer canvas, behövs för att 
         "composite": None
     }
 
-def prepare_image(editor_value):
+def prepare_image(editor_value, model_choice):
     """
     Tar bilden från Gradio ImageEditor,
     gör om den till 28x28 = 784 pixlar,
-    sparar bilden och skickar vidare till dummy-backend.
+    sparar bilden och skickar vidare till vald modell.
     """
 
     if editor_value is None or editor_value.get("composite") is None:
@@ -29,30 +35,45 @@ def prepare_image(editor_value):
     if isinstance(img, np.ndarray):
         img = Image.fromarray(img)
 
-    # Gör till gråskala
     img = img.convert("L")
-
-    # Skala till 28x28 = 784 pixlar
     img_28 = img.resize((28, 28))
 
-    # Spara bilden
     filename = SAVE_DIR / f"drawing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
     img_28.save(filename)
 
-    # Gör om till numpy-array för framtida modell
     pixels = np.array(img_28).reshape(1, 784)
 
-    # Dummy-svar tills modellerna finns
-    prediction = dummy_backend_predict(pixels)
+    if model_choice == "Random Forest":
+        prediction = predict_random_forest(pixels)
+    elif model_choice == "Alla modeller":
+        prediction = predict_all_models(pixels)
+    else:
+        prediction = "Ingen modell vald."
 
     return img_28, prediction
 
 
-def dummy_backend_predict(pixels):
-    """
-    Här byter vi senare ut mot riktig backend/model-anrop.
-    """
-    return "Modellen gissar något här... (byt ut mot riktig gissning senare)"
+def predict_random_forest(pixels):
+    prediction = random_forest_model.predict(pixels)[0]
+
+    if hasattr(random_forest_model, "predict_proba"):
+        probs = random_forest_model.predict_proba(pixels)[0]
+        confidence = probs[int(prediction)] * 100
+        return f"Random Forest gissar: {prediction}\nSäkerhet: {confidence:.1f}%"
+
+    return f"Random Forest gissar: {prediction}"
+
+
+def predict_all_models(pixels):
+    results = []
+
+    results.append(predict_random_forest(pixels))
+
+    # Lägg till fler modeller här senare:
+    # results.append(predict_svm(pixels))
+    # results.append(predict_cnn(pixels))
+
+    return "\n\n".join(results)
 
 
 with gr.Blocks(title="Teckenigenkänning") as demo:
@@ -84,10 +105,18 @@ with gr.Blocks(title="Teckenigenkänning") as demo:
             preview = gr.Image(
                 label="Sparad 28x28-bild",
                 height=80,
-                type="pil")
+                type="pil"
+            )
+
+            model_choice = gr.Dropdown(
+                choices=["Random Forest", "Alla modeller"],
+                value="Random Forest",
+                label="Välj modell"
+            )
             
             result = gr.Textbox(
-                label="Resultat från modell")
+                label="Resultat från modell"
+        )
 
     btn = gr.Button("Tolka tecken")
 
@@ -98,7 +127,7 @@ with gr.Blocks(title="Teckenigenkänning") as demo:
     
     btn.click(
         fn=prepare_image,
-        inputs=sketchpad,
+        inputs=[sketchpad, model_choice],
         outputs=[preview, result]
     )
 
