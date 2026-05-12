@@ -5,3 +5,27 @@ venv/
 .env
 
 saved_drawings/
+
+# Virtual environments
+venv/
+venv311/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Dataset
+*.csv
+
+# Trained models (valfritt)
+*.joblib
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
