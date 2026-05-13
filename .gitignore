@@ -29,3 +29,6 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Mnist CSV
+mnist_combined.csv

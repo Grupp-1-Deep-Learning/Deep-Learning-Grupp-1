@@ -4,17 +4,24 @@ import joblib
 from PIL import Image
 from pathlib import Path
 from datetime import datetime
+from xgboost import XGBClassifier
+
 
 SAVE_DIR = Path("saved_drawings")
 SAVE_DIR.mkdir(exist_ok=True)
 
 
 
-# Fyll på med modellerna här så att de laddas när appen startar.
+#### Fyll på med modellerna här så att de laddas när appen startar.
 
 RF_MODEL_PATH = Path("trained_models/random_forest_mnist.joblib")
 random_forest_model = joblib.load(RF_MODEL_PATH)
 
+XGBOOST_MODEL_PATH = Path("trained_models/xgboost_lettermodel.json")
+xgboost_model = XGBClassifier()
+xgboost_model.load_model(XGBOOST_MODEL_PATH)
+
+####
 
 
 def reset_canvas(): # Den här funktionen nollställer canvas, behövs för att vi ska börja med penseln. 
@@ -47,8 +54,14 @@ def prepare_image(editor_value, model_choice):
 
     pixels = np.array(img_28).reshape(1, 784)
 
+
+### Add your model here to make it appear in the model choice menu, as well as in 
+## "predict_all_models -> model_choice gr.dropdown"
+
     if model_choice == "Random Forest":
         prediction = predict_random_forest(pixels)
+    elif model_choice == "XGBoost":
+        prediction = predict_xgboost(pixels)
     elif model_choice == "Alla modeller":
         prediction = predict_all_models(pixels)
     else:
@@ -58,6 +71,17 @@ def prepare_image(editor_value, model_choice):
 
 
 # Fyll på med fler predict-funktioner här när vi lägger till fler modeller.
+
+
+def predict_xgboost(pixels):
+    prediction = xgboost_model.predict(pixels)[0]
+
+    if hasattr(xgboost_model, "predict_proba"):
+        probs = xgboost_model.predict_proba(pixels)[0]
+        confidence = probs[int(prediction)] * 100
+        return f"XGBoost gissar: {prediction}\nSäkerhet: {confidence:.1f}%"
+
+    return f"XGBoost gissar: {prediction}"
 
 
 def predict_random_forest(pixels):
@@ -75,6 +99,7 @@ def predict_all_models(pixels):
     results = []
 
     results.append(predict_random_forest(pixels))
+    results.append(predict_xgboost(pixels))
 
     # Lägg till fler modeller här senare:
     # results.append(predict_svm(pixels))
@@ -116,7 +141,7 @@ with gr.Blocks(title="Teckenigenkänning") as demo:
             )
 
             model_choice = gr.Dropdown(
-                choices=["Random Forest", "Alla modeller"],
+                choices=["Random Forest", "XGBoost", "Alla modeller"],
                 value="Random Forest",
                 label="Välj modell"
             )
