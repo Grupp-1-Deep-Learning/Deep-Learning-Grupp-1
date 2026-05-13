@@ -8,6 +8,10 @@ from datetime import datetime
 SAVE_DIR = Path("saved_drawings")
 SAVE_DIR.mkdir(exist_ok=True)
 
+
+
+# Fyll på med modellerna här så att de laddas när appen startar.
+
 RF_MODEL_PATH = Path("trained_models/random_forest_mnist.joblib")
 random_forest_model = joblib.load(RF_MODEL_PATH)
 
@@ -51,6 +55,9 @@ def prepare_image(editor_value, model_choice):
         prediction = "Ingen modell vald."
 
     return img_28, prediction
+
+
+# Fyll på med fler predict-funktioner här när vi lägger till fler modeller.
 
 
 def predict_random_forest(pixels):
