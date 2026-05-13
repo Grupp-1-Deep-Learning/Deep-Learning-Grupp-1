@@ -1,7 +1,5 @@
-These are the links for the dataset I used, if people want to use it. I think it contains around 70000 images.
+These are the combined files from the EMNIST set Pontus sent in discord, the digits and letters are respective test and train sets combined:
 
-Test: https://drive.google.com/file/d/1Tl6RwSUCFiMelej1skhqOxLLmTjeJFwf/view?usp=drive_link
+Digits: https://drive.google.com/file/d/13TIXu-9ertX2qM1x6tmppd4fV0C1-hrC/view?usp=sharing
 
-Train: https://drive.google.com/file/d/10XDIiWQhUZ_H9mmGdbnMJQzOXzpSbYnb/view?usp=drive_link
-
-Combined: https://drive.google.com/file/d/1SoYlRnwGoLpoIWVsyHiLdY1FUEUaFOsI/view?usp=drive_link
+Letters: https://drive.google.com/file/d/1CmX0XLD5fgygxl3DcBt4lzsFvDjrGqo9/view?usp=sharing
