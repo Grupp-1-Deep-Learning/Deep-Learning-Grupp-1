@@ -1,28 +1,41 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 import joblib
 import os
 
-print("Laddar dataset...")
+def load_emnist_mapping(path):
+    mapping = {}
 
-df = pd.read_csv("mnist_combined.csv")
+    with open(path, "r", encoding="utf-8") as file:
+        for line in file:
+            label, ascii_code = line.strip().split()
+            mapping[int(label)] = chr(int(ascii_code))
+
+    return mapping
+
+print("Laddar EMNIST balanced...")
+
+train_df = pd.read_csv("emnist-balanced-train.csv", header=None)
+test_df = pd.read_csv("emnist-balanced-test.csv", header=None)
 
 print("Dataset laddat!")
 
-# Features och labels
-X = df.drop("label", axis=1)
-y = df["label"]
+label_map = load_emnist_mapping("emnist-balanced-mapping.txt")
 
-# Train/test split
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.2,
-    random_state=42
-)
+print("Label mapping:")
+print(label_map)
 
+# Första kolumnen = label
+X_train = train_df.iloc[:, 1:]
+y_train = train_df.iloc[:, 0]
+
+X_test = test_df.iloc[:, 1:]
+y_test = test_df.iloc[:, 0]
+
+print("Train shape:", X_train.shape)
+print("Test shape:", X_test.shape)
 
 print("Startar GridSearch...")
 
@@ -63,7 +76,6 @@ model = RandomForestClassifier(
 print("Tränar slutmodell på hela träningsdatan...")
 model.fit(X_train, y_train)
 
-
 print("Utvärderar...")
 
 y_pred = model.predict(X_test)
@@ -71,12 +83,14 @@ accuracy = accuracy_score(y_test, y_pred)
 
 print(f"Accuracy: {accuracy:.4f}")
 
-# Spara modell
 os.makedirs("trained_models", exist_ok=True)
 
 joblib.dump(
-    model,
-    "trained_models/random_forest_mnist.joblib"
+    {
+        "model": model,
+        "label_map": label_map
+    },
+    "trained_models/random_forest_emnist_balanced.joblib"
 )
 
 print("Modellen sparad!")
