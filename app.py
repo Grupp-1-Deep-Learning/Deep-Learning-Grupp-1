@@ -17,9 +17,14 @@ SAVE_DIR.mkdir(exist_ok=True)
 RF_MODEL_PATH = Path("trained_models/random_forest_mnist.joblib")
 random_forest_model = joblib.load(RF_MODEL_PATH)
 
-XGBOOST_MODEL_PATH = Path("trained_models/xgboost_lettermodel.json")
-xgboost_model = XGBClassifier()
-xgboost_model.load_model(XGBOOST_MODEL_PATH)
+XGBOOST_DIGITMODEL_PATH = Path("trained_models/xgboost_digitmodel.json")
+xgboost_digitmodel = XGBClassifier()
+xgboost_digitmodel.load_model(XGBOOST_DIGITMODEL_PATH)
+
+XGBOOST_LETTERMODEL_PATH = Path("trained_models/xgboost_lettermodel.json")
+xgboost_lettermodel = XGBClassifier()
+xgboost_lettermodel.load_model(XGBOOST_LETTERMODEL_PATH)
+
 
 ####
 
@@ -62,6 +67,8 @@ def prepare_image(editor_value, model_choice):
         prediction = predict_random_forest(pixels)
     elif model_choice == "XGBoost":
         prediction = predict_xgboost(pixels)
+    elif model_choice == "XGBoost Letter":
+        prediction = predict_xgboost_letters(pixels)
     elif model_choice == "Alla modeller":
         prediction = predict_all_models(pixels)
     else:
@@ -74,14 +81,25 @@ def prepare_image(editor_value, model_choice):
 
 
 def predict_xgboost(pixels):
-    prediction = xgboost_model.predict(pixels)[0]
+    prediction = xgboost_digitmodel.predict(pixels)[0]
 
-    if hasattr(xgboost_model, "predict_proba"):
-        probs = xgboost_model.predict_proba(pixels)[0]
+    if hasattr(xgboost_digitmodel, "predict_proba"):
+        probs = xgboost_digitmodel.predict_proba(pixels)[0]
         confidence = probs[int(prediction)] * 100
         return f"XGBoost gissar: {prediction}\nSäkerhet: {confidence:.1f}%"
 
     return f"XGBoost gissar: {prediction}"
+
+def predict_xgboost_letters(pixels):
+    prediction = xgboost_lettermodel.predict(pixels)[0]
+
+    if hasattr(xgboost_lettermodel, "predict_proba"):
+        probs = xgboost_lettermodel.predict_proba(pixels)[0]
+        confidence = probs[int(prediction)] * 100
+        letter = chr(prediction + 65)
+
+        return f"XGBoost gissar: {letter}\nSäkerhet: {confidence:.1f}%"
+
 
 
 def predict_random_forest(pixels):
@@ -141,7 +159,10 @@ with gr.Blocks(title="Teckenigenkänning") as demo:
             )
 
             model_choice = gr.Dropdown(
-                choices=["Random Forest", "XGBoost", "Alla modeller"],
+                choices=["Random Forest",
+                        "XGBoost", 
+                        "XGBoost Letter", 
+                        "Alla modeller"],
                 value="Random Forest",
                 label="Välj modell"
             )
