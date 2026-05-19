@@ -54,7 +54,16 @@ def prepare_image(editor_value, model_choice):
     img = img.convert("L")
 
     img_28 = img.resize((28, 28), Image.Resampling.LANCZOS)
-    img_28 = img_28.rotate(90, expand=True)
+
+
+
+    ## Add letter models in the if-tuple below (if you're using the EMNIST-dataset that's in "links.md")
+
+    letter_models = ("XGBoost Letter",
+                     )
+
+    if model_choice in letter_models:
+        img_28 = img_28.rotate(90, expand=True)
 
 
     filename = SAVE_DIR / f"drawing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
