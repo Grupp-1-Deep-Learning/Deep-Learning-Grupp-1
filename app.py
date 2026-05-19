@@ -52,7 +52,10 @@ def prepare_image(editor_value, model_choice):
         img = Image.fromarray(img)
 
     img = img.convert("L")
-    img_28 = img.resize((28, 28))
+
+    img_28 = img.resize((28, 28), Image.Resampling.LANCZOS)
+    img_28 = img_28.rotate(90, expand=True)
+
 
     filename = SAVE_DIR / f"drawing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
     img_28.save(filename)
@@ -141,7 +144,7 @@ with gr.Blocks(title="Teckenigenkänning") as demo:
                 colors=["#FFFFFF"],
                 default_color="#FFFFFF",
                 color_mode="fixed",
-                default_size=20
+                default_size=10
             ),
             eraser=gr.Eraser(default_size=20),
             height=400,
