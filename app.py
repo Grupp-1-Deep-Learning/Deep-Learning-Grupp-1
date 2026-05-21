@@ -41,7 +41,9 @@ def reset_canvas(): # Den här funktionen nollställer canvas, behövs för att 
 def prepare_image(editor_value, model_choice):
     """
     Tar bilden från Gradio ImageEditor,
-    gör om den till 28x28 = 784 pixlar,
+    beskär bort tom yta,
+    centrerar tecknet,
+    gör om till 28x28 = 784 pixlar,
     sparar bilden och skickar vidare till vald modell.
     """
 
@@ -55,27 +57,64 @@ def prepare_image(editor_value, model_choice):
 
     img = img.convert("L")
 
-    img_28 = img.resize((28, 28), Image.Resampling.LANCZOS)
+    # Gör till numpy-array
+    arr = np.array(img)
 
+    # Om bilden har svart tecken på vit bakgrund, invertera
+    # Målet är: svart bakgrund, vitt tecken
+    if arr.mean() > 127:
+        arr = 255 - arr
 
+    # Ta bort svaga pixlar/brus
+    arr[arr < 30] = 0
 
-    ## Add letter models in the if-tuple below (if you're using the EMNIST-dataset that's in "links.md")
+    # Hitta alla pixlar där något är ritat
+    coords = np.argwhere(arr > 0)
 
-    letter_models = ("xgboost_lettermodel.json",
-                     )
+    if coords.size == 0:
+        return None, "Jag hittar inget ritat tecken 🙂"
+
+    # Bounding box runt tecknet
+    y0, x0 = coords.min(axis=0)
+    y1, x1 = coords.max(axis=0)
+
+    cropped = arr[y0:y1 + 1, x0:x1 + 1]
+
+    # Gör bilden kvadratisk
+    h, w = cropped.shape
+    size = max(h, w)
+
+    square = np.zeros((size, size), dtype=np.uint8)
+
+    y_offset = (size - h) // 2
+    x_offset = (size - w) // 2
+
+    square[y_offset:y_offset + h, x_offset:x_offset + w] = cropped
+
+    square_img = Image.fromarray(square)
+
+    # Skala till ca 20x20 så det finns marginal runt tecknet
+    square_img.thumbnail((20, 20), Image.Resampling.LANCZOS)
+
+    # Lägg centrerat på 28x28 canvas
+    img_28 = Image.new("L", (28, 28), 0)
+
+    x = (28 - square_img.width) // 2
+    y = (28 - square_img.height) // 2
+
+    img_28.paste(square_img, (x, y))
+
+    letter_models = (
+        "xgboost_lettermodel.json",
+    )
 
     if model_choice in letter_models:
-        img_28 = img_28.rotate(90, expand=True)
-
+        img_28 = img_28.rotate(90, expand=False)
 
     filename = SAVE_DIR / f"drawing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
     img_28.save(filename)
 
     pixels = np.array(img_28).reshape(1, 784)
-
-
-### Add your model here to make it appear in the model choice menu, as well as in 
-## "predict_all_models -> model_choice gr.dropdown"
 
     if model_choice == "Alla modeller":
         prediction = predict_all_models(pixels)
@@ -85,8 +124,6 @@ def prepare_image(editor_value, model_choice):
         prediction = "Ingen modell vald eller modellen hittades inte."
 
     return img_28, prediction
-
-
 # Fyll på med fler predict-funktioner här när vi lägger till fler modeller.
 
 
