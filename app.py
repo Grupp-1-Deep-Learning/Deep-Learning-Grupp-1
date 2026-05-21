@@ -10,23 +10,25 @@ from xgboost import XGBClassifier
 SAVE_DIR = Path("saved_drawings")
 SAVE_DIR.mkdir(exist_ok=True)
 
+# Kasta din modell i "trained_models"-mappen så laddas den automatiskt när appen startar.
+MODELS_DIR = Path("trained_models") 
+loaded_models = {}
 
-
-#### Fyll på med modellerna här så att de laddas när appen startar.
-
-RF_MODEL_PATH = Path("trained_models/random_forest_mnist.joblib")
-random_forest_model = joblib.load(RF_MODEL_PATH)
-
-XGBOOST_DIGITMODEL_PATH = Path("trained_models/xgboost_digitmodel.json")
-xgboost_digitmodel = XGBClassifier()
-xgboost_digitmodel.load_model(XGBOOST_DIGITMODEL_PATH)
-
-XGBOOST_LETTERMODEL_PATH = Path("trained_models/xgboost_lettermodel.json")
-xgboost_lettermodel = XGBClassifier()
-xgboost_lettermodel.load_model(XGBOOST_LETTERMODEL_PATH)
-
-
-####
+if MODELS_DIR.exists() and MODELS_DIR.is_dir():
+    for model_path in MODELS_DIR.iterdir():
+        if model_path.is_file():
+            if model_path.suffix == ".joblib":
+                try:
+                    loaded_models[model_path.name] = joblib.load(model_path)
+                except Exception:
+                    pass
+            elif model_path.suffix == ".json":
+                try:
+                    model = XGBClassifier()
+                    model.load_model(model_path)
+                    loaded_models[model_path.name] = model
+                except Exception:
+                    pass
 
 
 def reset_canvas(): # Den här funktionen nollställer canvas, behövs för att vi ska börja med penseln. 
@@ -59,7 +61,7 @@ def prepare_image(editor_value, model_choice):
 
     ## Add letter models in the if-tuple below (if you're using the EMNIST-dataset that's in "links.md")
 
-    letter_models = ("XGBoost Letter",
+    letter_models = ("xgboost_lettermodel.json",
                      )
 
     if model_choice in letter_models:
@@ -75,16 +77,12 @@ def prepare_image(editor_value, model_choice):
 ### Add your model here to make it appear in the model choice menu, as well as in 
 ## "predict_all_models -> model_choice gr.dropdown"
 
-    if model_choice == "Random Forest":
-        prediction = predict_random_forest(pixels)
-    elif model_choice == "XGBoost":
-        prediction = predict_xgboost(pixels)
-    elif model_choice == "XGBoost Letter":
-        prediction = predict_xgboost_letters(pixels)
-    elif model_choice == "Alla modeller":
+    if model_choice == "Alla modeller":
         prediction = predict_all_models(pixels)
+    elif model_choice in loaded_models:
+        prediction = predict_single_model(model_choice, pixels)
     else:
-        prediction = "Ingen modell vald."
+        prediction = "Ingen modell vald eller modellen hittades inte."
 
     return img_28, prediction
 
@@ -92,48 +90,33 @@ def prepare_image(editor_value, model_choice):
 # Fyll på med fler predict-funktioner här när vi lägger till fler modeller.
 
 
-def predict_xgboost(pixels):
-    prediction = xgboost_digitmodel.predict(pixels)[0]
+def predict_single_model(model_name, pixels):
+    model = loaded_models.get(model_name)
+    if model is None:
+        return f"Modellen {model_name} kunde inte laddas."
 
-    if hasattr(xgboost_digitmodel, "predict_proba"):
-        probs = xgboost_digitmodel.predict_proba(pixels)[0]
+    prediction = model.predict(pixels)[0]
+    
+    if "letter" in model_name.lower():
+        display_prediction = chr(int(prediction) + 65)
+    else:
+        display_prediction = str(prediction)
+
+    if hasattr(model, "predict_proba"):
+        probs = model.predict_proba(pixels)[0]
         confidence = probs[int(prediction)] * 100
-        return f"XGBoost gissar: {prediction}\nSäkerhet: {confidence:.1f}%"
+        return f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%"
 
-    return f"XGBoost gissar: {prediction}"
-
-def predict_xgboost_letters(pixels):
-    prediction = xgboost_lettermodel.predict(pixels)[0]
-
-    if hasattr(xgboost_lettermodel, "predict_proba"):
-        probs = xgboost_lettermodel.predict_proba(pixels)[0]
-        confidence = probs[int(prediction)] * 100
-        letter = chr(prediction + 65)
-
-        return f"XGBoost gissar: {letter}\nSäkerhet: {confidence:.1f}%"
-
-
-
-def predict_random_forest(pixels):
-    prediction = random_forest_model.predict(pixels)[0]
-
-    if hasattr(random_forest_model, "predict_proba"):
-        probs = random_forest_model.predict_proba(pixels)[0]
-        confidence = probs[int(prediction)] * 100
-        return f"Random Forest gissar: {prediction}\nSäkerhet: {confidence:.1f}%"
-
-    return f"Random Forest gissar: {prediction}"
+    return f"{model_name} gissar: {display_prediction}"
 
 
 def predict_all_models(pixels):
+    if not loaded_models:
+        return "Inga modeller är inladdade i systemet."
+        
     results = []
-
-    results.append(predict_random_forest(pixels))
-    results.append(predict_xgboost(pixels))
-
-    # Lägg till fler modeller här senare:
-    # results.append(predict_svm(pixels))
-    # results.append(predict_cnn(pixels))
+    for model_name in loaded_models.keys():
+        results.append(predict_single_model(model_name, pixels))
 
     return "\n\n".join(results)
 
@@ -170,12 +153,26 @@ with gr.Blocks(title="Teckenigenkänning") as demo:
                 type="pil"
             )
 
+            model_choices = []
+
+            # Hämta ut alla filnamn (nycklar) på de modeller som lyckades laddas in från mappen
+            for model_name in loaded_models.keys():
+                model_choices.append(model_name)
+
+            model_choices.append("Alla modeller")
+
+            # Standardval som ska visas i rullgardinsmenyn när appen startar
+            if len(loaded_models) > 0:
+                all_model_names = list(loaded_models.keys())
+                default_value = all_model_names[0]
+            else:
+                # Om mappen var tom och inga modeller hittades
+                default_value = "Alla modeller"
+
+            # Med den nya koden är vi mindre begränsade av våra modellval
             model_choice = gr.Dropdown(
-                choices=["Random Forest",
-                        "XGBoost", 
-                        "XGBoost Letter", 
-                        "Alla modeller"],
-                value="Random Forest",
+                choices=model_choices,
+                value=default_value,
                 label="Välj modell"
             )
             
