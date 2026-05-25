@@ -158,66 +158,69 @@ def predict_all_models(pixels):
     return "\n\n".join(results)
 
 
-with gr.Blocks(title="Teckenigenkänning") as demo:
-    gr.Markdown("# Teckenigenkänning")
-    gr.Markdown("Rita ett tecken i rutan och klicka på **Tolka tecken**.")
+with gr.Blocks(
+    title="Teckenigenkänning",
+    css_paths="style.css"
+) as demo:
 
-    with gr.Row(): # Lagt till så att vi börjar med penseln direkt
-        sketchpad = gr.ImageEditor(
-            label="Rita tecken här",
-            type="pil",
-            image_mode="L",
-            sources=(),
-            interactive=True,
-            brush=gr.Brush( # Ställer in penseln
-                colors=["#FFFFFF"],
-                default_color="#FFFFFF",
-                color_mode="fixed",
-                default_size=10
-            ),
-            eraser=gr.Eraser(default_size=20),
-            height=400,
-            width=400,
-            canvas_size=(400, 400),
-            layers=False,
-            value=reset_canvas()
+    with gr.Column(elem_id="app-wrapper"):
+
+        gr.HTML("""
+        <div class="main-title">
+            ✍️ Teckenigenkänning
+        </div>
+
+        <div class="subtitle">
+            Rita ett tecken och låt modellen försöka tolka det.
+        </div>
+        """)
+
+        with gr.Row(equal_height=True, elem_classes="main-row"):
+
+            with gr.Column(elem_classes=["app-panel", "draw-column"]):
+                sketchpad = gr.ImageEditor(
+                    label="Rita tecken här",
+                    type="pil",
+                    image_mode="L",
+                    sources=(),
+                    interactive=True,
+                    brush=gr.Brush(
+                        colors=["#FFFFFF"],
+                        default_color="#FFFFFF",
+                        color_mode="fixed",
+                        default_size=10
+                    ),
+                    eraser=gr.Eraser(default_size=20),
+                    height=400,
+                    width=400,
+                    canvas_size=(400, 400),
+                    layers=False,
+                    value=reset_canvas()
+                )
+
+            with gr.Column(elem_classes=["app-panel", "result-column"]):
+                preview = gr.Image(
+                    label="Sparad 28x28-bild",
+                    height=120,
+                    type="pil"
+                )
+
+                model_choice = gr.Dropdown(
+                    choices=model_choices,
+                    value=default_value,
+                    label="Välj modell"
+                )
+
+                result = gr.Textbox(
+                    label="Resultat från modell",
+                    lines=6,
+                    elem_classes="result-box"
+                )
+
+        btn = gr.Button(
+            "🔍 Tolka tecken",
+            elem_classes="primary-btn"
         )
-
-        with gr.Column():
-            preview = gr.Image(
-                label="Sparad 28x28-bild",
-                height=80,
-                type="pil"
-            )
-
-            model_choices = []
-
-            # Hämta ut alla filnamn (nycklar) på de modeller som lyckades laddas in från mappen
-            for model_name in loaded_models.keys():
-                model_choices.append(model_name)
-
-            model_choices.append("Alla modeller")
-
-            # Standardval som ska visas i rullgardinsmenyn när appen startar
-            if len(loaded_models) > 0:
-                all_model_names = list(loaded_models.keys())
-                default_value = all_model_names[0]
-            else:
-                # Om mappen var tom och inga modeller hittades
-                default_value = "Alla modeller"
-
-            # Med den nya koden är vi mindre begränsade av våra modellval
-            model_choice = gr.Dropdown(
-                choices=model_choices,
-                value=default_value,
-                label="Välj modell"
-            )
-            
-            result = gr.Textbox(
-                label="Resultat från modell"
-        )
-
-    btn = gr.Button("Tolka tecken")
 
     sketchpad.clear( # Kallar på clear
         fn=reset_canvas,
