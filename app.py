@@ -158,9 +158,16 @@ def predict_all_models(pixels):
     return "\n\n".join(results)
 
 
+model_choices = list(loaded_models.keys())
+model_choices.append("Alla modeller")
+
+if len(loaded_models) > 0:
+    default_value = model_choices[0]
+else:
+    default_value = "Alla modeller"
+
 with gr.Blocks(
-    title="Teckenigenkänning",
-    css_paths="style.css"
+    title="Teckenigenkänning"
 ) as demo:
 
     with gr.Column(elem_id="app-wrapper"):
@@ -199,21 +206,24 @@ with gr.Blocks(
                 )
 
             with gr.Column(elem_classes=["app-panel", "result-column"]):
+
+                model_choice = gr.Radio(
+                    choices=model_choices,
+                    value=default_value,
+                    label="Välj modell",
+                    interactive=True,
+                    elem_classes="model-radio"
+                )   
+
                 preview = gr.Image(
                     label="Sparad 28x28-bild",
                     height=120,
                     type="pil"
                 )
 
-                model_choice = gr.Dropdown(
-                    choices=model_choices,
-                    value=default_value,
-                    label="Välj modell"
-                )
-
                 result = gr.Textbox(
                     label="Resultat från modell",
-                    lines=6,
+                    lines=4,
                     elem_classes="result-box"
                 )
 
@@ -235,4 +245,4 @@ with gr.Blocks(
 
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(css_paths="style.css")

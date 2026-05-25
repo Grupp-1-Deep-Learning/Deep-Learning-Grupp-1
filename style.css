@@ -47,10 +47,10 @@ body {
 }
 
 .main-row {
-    display: flex !important;
-    flex-wrap: wrap !important;
+    display: grid !important;
+    grid-template-columns: minmax(340px, 430px) minmax(340px, 430px);
     justify-content: center !important;
-    align-items: flex-start !important;
+    align-items: start !important;
     gap: 24px !important;
     width: 100%;
 }
@@ -167,18 +167,105 @@ footer {
     }
 
     .primary-btn {
-        margin-top: 16px !important;
-    }
+    margin-top: 22px !important;
+    width: min(100%, 884px) !important;
+}
 }
 
 @media (max-width: 900px) {
+    .main-row {
+        grid-template-columns: minmax(300px, 430px);
+    }
+
     .draw-column,
     .result-column {
-        flex-basis: 100% !important;
-        max-width: 520px !important;
+        max-width: 430px !important;
     }
 
     .primary-btn {
-        max-width: 520px !important;
+        max-width: 430px !important;
     }
+}
+
+/* Normal muspekare */
+body,
+button,
+label,
+select,
+div,
+span {
+    cursor: default !important;
+}
+
+/* Klickbara saker */
+button,
+select,
+input[type="button"] {
+    cursor: pointer !important;
+}
+
+/* Textfält ska fortfarande ha textmarkör */
+textarea,
+input {
+    cursor: text !important;
+}
+
+/* ===== MODEL RADIO ===== */
+
+.model-radio {
+    margin-bottom: 18px !important;
+}
+
+/* Själva korten */
+.model-radio label {
+    background: rgba(255,255,255,0.92) !important;
+
+    border: 1px solid rgba(0,0,0,0.08) !important;
+
+    border-radius: 14px !important;
+
+    padding: 10px 14px !important;
+
+    margin-bottom: 10px !important;
+
+    color: #111827 !important;
+
+    cursor: pointer !important;
+
+    transition: 0.18s ease !important;
+}
+
+/* Hover */
+.model-radio label:hover {
+    background: white !important;
+
+    transform: translateY(-1px);
+}
+
+/* Radio-text */
+.model-radio span {
+    color: #111827 !important;
+    font-weight: 600 !important;
+}
+
+/* Själva radio-cirkeln */
+.model-radio input[type="radio"] {
+    accent-color: #6366f1 !important;
+    cursor: pointer !important;
+}
+
+/* Markerad modell */
+.model-radio label:has(input:checked) {
+    background:
+        linear-gradient(
+            90deg,
+            rgba(56,189,248,0.18),
+            rgba(99,102,241,0.18)
+        ) !important;
+
+    border:
+        1px solid rgba(99,102,241,0.45) !important;
+
+    box-shadow:
+        0 0 18px rgba(99,102,241,0.18);
 }
