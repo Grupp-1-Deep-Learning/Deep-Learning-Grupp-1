@@ -5,6 +5,7 @@ from PIL import Image
 from pathlib import Path
 from datetime import datetime
 from xgboost import XGBClassifier
+from tensorflow.keras.models import load_model
 
 
 SAVE_DIR = Path("saved_drawings")
@@ -27,6 +28,11 @@ if MODELS_DIR.exists() and MODELS_DIR.is_dir():
                     model = XGBClassifier()
                     model.load_model(model_path)
                     loaded_models[model_path.name] = model
+                except Exception:
+                    pass
+            elif model_path.suffix == ".keras":
+                try:
+                    loaded_models[model_path.name] = load_model(model_path)
                 except Exception:
                     pass
 
@@ -105,7 +111,7 @@ def prepare_image(editor_value, model_choice):
     img_28.paste(square_img, (x, y))
 
     letter_models = (
-        "xgboost_lettermodel.json",
+        "xgboost_lettermodel.json",'logistic_lettermodel.joblib',"cnn_lettermodel.keras"
     )
 
     if model_choice in letter_models:
@@ -131,17 +137,26 @@ def predict_single_model(model_name, pixels):
     model = loaded_models.get(model_name)
     if model is None:
         return f"Modellen {model_name} kunde inte laddas."
+    
+    if model_name.endswith(".keras"):
+        cnn_pixels = pixels.reshape(1, 28, 28, 1) / 255.0
+        probs = model.predict(cnn_pixels, verbose=0)[0]
+        prediction = np.argmax(probs)
+        confidence = probs[prediction] * 100
+    else:
+        prediction = model.predict(pixels)[0]
+        confidence = None
 
-    prediction = model.predict(pixels)[0]
+        if hasattr(model, "predict_proba"):
+            probs = model.predict_proba(pixels)[0]
+            confidence = probs[int(prediction)] * 100
     
     if "letter" in model_name.lower():
         display_prediction = chr(int(prediction) + 65)
     else:
         display_prediction = str(prediction)
 
-    if hasattr(model, "predict_proba"):
-        probs = model.predict_proba(pixels)[0]
-        confidence = probs[int(prediction)] * 100
+    if confidence is not None:
         return f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%"
 
     return f"{model_name} gissar: {display_prediction}"
