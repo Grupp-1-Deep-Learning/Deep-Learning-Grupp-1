@@ -1,0 +1,208 @@
+html,
+body,
+.gradio-container,
+.app,
+body > gradio-app,
+.dark,
+.light {
+    background: transparent !important;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at top, rgba(99, 102, 241, 0.35), transparent 35%),
+        radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.22), transparent 40%),
+        linear-gradient(135deg, #020617 0%, #0f172a 45%, #1e1b4b 100%) !important;
+    background-attachment: fixed;
+}
+
+.gradio-container {
+    max-width: 1250px !important;
+    margin: auto !important;
+    padding: 26px 24px !important;
+}
+
+#app-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.main-title {
+    text-align: center;
+    font-size: clamp(2.2rem, 5vw, 4rem);
+    font-weight: 800;
+    color: white;
+    margin-bottom: 8px;
+    text-shadow: 0 0 25px rgba(255,255,255,0.12);
+}
+
+.subtitle {
+    text-align: center;
+    color: #cbd5e1;
+    font-size: clamp(1rem, 2vw, 1.25rem);
+    margin-bottom: 26px;
+}
+
+.main-row {
+    display: grid !important;
+    grid-template-columns: 360px 260px 360px;
+    gap: 22px;
+    align-items: start !important;
+    justify-content: center;
+}
+
+/* ===== PANELS ===== */
+
+.app-panel {
+    padding: 16px !important;
+    border-radius: 22px !important;
+    background: rgba(255,255,255,0.06) !important;
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    height: fit-content !important;
+}
+
+/* ===== DRAW ===== */
+
+.draw-column {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* ===== MIDDLE ===== */
+
+.middle-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+.model-column {
+    width: 260px !important;
+    height: 260px !important;
+    overflow: hidden !important;
+}
+
+.model-radio {
+    max-height: 205px;
+    overflow-y: auto !important;
+    padding-right: 8px;
+}
+
+/* ===== RESULT ===== */
+
+.result-column {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.result-box textarea {
+    height: 130px !important;
+    min-height: 130px !important;
+    max-height: 130px !important;
+
+    overflow-y: auto !important;
+    resize: none !important;
+
+    background: rgba(15,23,42,0.82) !important;
+    color: #f8fafc !important;
+
+    border-radius: 16px !important;
+
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+}
+
+/* ===== BUTTON ===== */
+
+.primary-btn {
+    width: 240px !important;
+    min-height: 48px !important;
+
+    border-radius: 16px !important;
+
+    background:
+        linear-gradient(
+            135deg,
+            #4f46e5,
+            #7c3aed
+        ) !important;
+
+    color: white !important;
+
+    border: none !important;
+
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+
+    transition: all 0.18s ease !important;
+
+    box-shadow:
+        0 10px 30px rgba(99,102,241,0.35);
+}
+
+.primary-btn:hover {
+    transform: translateY(-2px);
+
+    box-shadow:
+        0 16px 36px rgba(99,102,241,0.5);
+
+    filter: brightness(1.06);
+}
+
+/* ===== TOPP 3 KNAPPAR ===== */
+
+.choice-buttons {
+    width: 240px;
+}
+
+/* ===== SCROLLBAR ===== */
+
+.model-radio::-webkit-scrollbar,
+.result-box textarea::-webkit-scrollbar {
+    width: 8px;
+}
+
+.model-radio::-webkit-scrollbar-thumb,
+.result-box textarea::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(148,163,184,0.45);
+}
+
+.model-radio::-webkit-scrollbar-track,
+.result-box textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* ===== PREVIEW ===== */
+
+.result-column .image-container,
+.canvas-container {
+    border-radius: 18px !important;
+    overflow: hidden !important;
+}
+
+/* ===== RESPONSIVE ===== */
+
+@media (max-width: 1100px) {
+    .main-row {
+        grid-template-columns: 1fr;
+    }
+
+    .middle-column {
+        width: 100%;
+    }
+
+    .model-column,
+    .primary-btn,
+    .choice-buttons {
+        width: 100% !important;
+        max-width: 420px;
+    }
+}

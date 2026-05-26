@@ -39,7 +39,7 @@ if MODELS_DIR.exists() and MODELS_DIR.is_dir():
 
 def reset_canvas(): # Den här funktionen nollställer canvas, behövs för att vi ska börja med penseln. 
     return {
-        "background": Image.new("L", (400, 400), 0), # Skapar en svart bakgrund
+        "background": Image.new("L", (340, 340), 0), # Skapar en svart bakgrund
         "layers": [],
         "composite": None
     }
@@ -122,6 +122,8 @@ def prepare_image(editor_value, model_choice):
 
     pixels = np.array(img_28).reshape(1, 784)
 
+    model_choice = display_to_model.get(model_choice)
+
     if model_choice == "Alla modeller":
         prediction, o1, o2, o3 = predict_all_models(pixels)
     elif model_choice in loaded_models:
@@ -198,6 +200,7 @@ def predict_all_models(pixels):
         return "Inga modeller är inladdade i systemet.", None, None, None
         
     results = []
+
     for model_name in loaded_models.keys():
         res = predict_single_model(model_name, pixels)
         results.append(res[0])
@@ -205,74 +208,105 @@ def predict_all_models(pixels):
     return "\n\n".join(results), None, None, None
 
 
-with gr.Blocks(title="Teckenigenkänning") as demo:
-    gr.Markdown("# Teckenigenkänning")
-    gr.Markdown("Rita ett tecken i rutan och klicka på **Tolka tecken**.")
+# Mapping mellan snyggt namn och riktigt filnamn
+display_to_model = {}
 
-    with gr.Row(): # Lagt till så att vi börjar med penseln direkt
-        sketchpad = gr.ImageEditor(
-            label="Rita tecken här",
-            type="pil",
-            image_mode="L",
-            sources=(),
-            interactive=True,
-            brush=gr.Brush( # Ställer in penseln
-                colors=["#FFFFFF"],
-                default_color="#FFFFFF",
-                color_mode="fixed",
-                default_size=10
-            ),
-            eraser=gr.Eraser(default_size=20),
-            height=400,
-            width=400,
-            canvas_size=(400, 400),
-            layers=False,
-            value=reset_canvas()
-        )
+for model_name in loaded_models.keys():
 
-        with gr.Column():
-            preview = gr.Image(
-                label="Sparad 28x28-bild",
-                height=80,
-                type="pil"
-            )
+    clean_name = (
+        model_name
+        .replace(".joblib", "")
+        .replace(".json", "")
+        .replace(".keras", "")
+        .replace("_", " ")
+        .title()
+    )
 
-            model_choices = []
+    display_to_model[clean_name] = model_name
 
-            # Hämta ut alla filnamn (nycklar) på de modeller som lyckades laddas in från mappen
-            for model_name in loaded_models.keys():
-                model_choices.append(model_name)
+display_to_model["Alla modeller"] = "Alla modeller"
 
-            model_choices.append("Alla modeller")
+model_choices = list(display_to_model.keys())
 
-            # Standardval som ska visas i rullgardinsmenyn när appen startar
-            if len(loaded_models) > 0:
-                all_model_names = list(loaded_models.keys())
-                default_value = all_model_names[0]
-            else:
-                # Om mappen var tom och inga modeller hittades
-                default_value = "Alla modeller"
+if len(model_choices) > 0:
+    default_value = model_choices[0]
+else:
+    default_value = "Alla modeller"
 
-            # Med den nya koden är vi mindre begränsade av våra modellval
-            model_choice = gr.Dropdown(
-                choices=model_choices,
-                value=default_value,
-                label="Välj modell"
-            )
-            
-            result = gr.Textbox(
-                label="Resultat från modell"
-            )
-            
-            # Topp 3 gissningar för bokstavsmodellen
-            with gr.Row():
-                btn_opt1 = gr.Button("Välj 1", visible=False)
-                btn_opt2 = gr.Button("Välj 2", visible=False)
-                btn_opt3 = gr.Button("Välj 3", visible=False)
-                
-            confirmation = gr.Textbox(label="Ditt val: ", visible=False)
+with gr.Blocks(
+    title="Teckenigenkänning"
+) as demo:
 
-    btn = gr.Button("Tolka tecken")
+    with gr.Column(elem_id="app-wrapper"):
+
+        gr.HTML("""
+        <div class="main-title">
+            ✍️ Teckenigenkänning
+        </div>
+
+        <div class="subtitle">
+            Rita ett tecken och låt modellen försöka tolka det.
+        </div>
+        """)
+
+        with gr.Row(equal_height=True, elem_classes="main-row"):
+
+            with gr.Column(elem_classes=["app-panel", "draw-column"]):
+                sketchpad = gr.ImageEditor(
+                    label="Rita tecken här",
+                    type="pil",
+                    image_mode="L",
+                    sources=(),
+                    interactive=True,
+                    brush=gr.Brush(
+                        colors=["#FFFFFF"],
+                        default_color="#FFFFFF",
+                        color_mode="fixed",
+                        default_size=10
+                    ),
+                    eraser=gr.Eraser(default_size=20),
+                    height=320,
+                    width=320,
+                    canvas_size=(320, 320),
+                    layers=False,
+                    value=reset_canvas()
+                )
+
+            with gr.Column(elem_classes=["middle-column"]):
+
+                with gr.Column(elem_classes=["app-panel", "model-column"]):
+                    model_choice = gr.Radio(
+                        choices=model_choices,
+                        value=default_value,
+                        label="Välj modell",
+                        interactive=True,
+                        elem_classes="model-radio"
+                    )
+
+                btn = gr.Button(
+                    "🔍 Tolka tecken",
+                    elem_classes="primary-btn"
+                )
+
+                with gr.Row(elem_classes="choice-buttons"):
+                    btn_opt1 = gr.Button("Välj 1", visible=False)
+                    btn_opt2 = gr.Button("Välj 2", visible=False)
+                    btn_opt3 = gr.Button("Välj 3", visible=False)
+
+                confirmation = gr.Textbox(label="Ditt val: ", visible=False)
+
+            with gr.Column(elem_classes=["app-panel", "result-column"]):
+                preview = gr.Image(
+                    label="Sparad 28x28-bild",
+                    height=120,
+                    type="pil"
+                )
+
+                result = gr.Textbox(
+                    label="Resultat från modell",
+                    lines=7,
+                    elem_classes="result-box"
+                )
 
     sketchpad.clear( # Kallar på clear
         fn=reset_canvas,
@@ -296,4 +330,4 @@ with gr.Blocks(title="Teckenigenkänning") as demo:
 
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(css_paths="style.css")
