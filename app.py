@@ -54,7 +54,7 @@ def prepare_image(editor_value, model_choice):
     """
 
     if editor_value is None or editor_value.get("composite") is None:
-        return None, "Rita ett tecken först 🙂"
+        return None, "Rita ett tecken först 🙂", gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
 
     img = editor_value["composite"]
 
@@ -78,7 +78,7 @@ def prepare_image(editor_value, model_choice):
     coords = np.argwhere(arr > 0)
 
     if coords.size == 0:
-        return None, "Jag hittar inget ritat tecken 🙂"
+        return None, "Jag hittar inget ritat tecken 🙂", gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
 
     # Bounding box runt tecknet
     y0, x0 = coords.min(axis=0)
@@ -123,20 +123,51 @@ def prepare_image(editor_value, model_choice):
     pixels = np.array(img_28).reshape(1, 784)
 
     if model_choice == "Alla modeller":
-        prediction = predict_all_models(pixels)
+        prediction, o1, o2, o3 = predict_all_models(pixels)
     elif model_choice in loaded_models:
-        prediction = predict_single_model(model_choice, pixels)
+        prediction, o1, o2, o3 = predict_single_model(model_choice, pixels)
     else:
-        prediction = "Ingen modell vald eller modellen hittades inte."
+        prediction, o1, o2, o3 = "Ingen modell vald eller modellen hittades inte.", None, None, None
 
-    return img_28, prediction
-# Fyll på med fler predict-funktioner här när vi lägger till fler modeller.
+    if o1 is not None:
+        return (
+            img_28, 
+            prediction, 
+            gr.update(value=f"Välj {o1}", visible=True),
+            gr.update(value=f"Välj {o2}", visible=True),
+            gr.update(value=f"Välj {o3}", visible=True),
+            gr.update(value="", visible=False)
+        )
+    else:
+        return (
+            img_28, 
+            prediction, 
+            gr.update(visible=False),
+            gr.update(visible=False),
+            gr.update(visible=False),
+            gr.update(value="", visible=False)
+        )
 
 
 def predict_single_model(model_name, pixels):
     model = loaded_models.get(model_name)
     if model is None:
-        return f"Modellen {model_name} kunde inte laddas."
+        return f"Modellen {model_name} kunde inte laddas.", None, None, None
+    
+    # Speciell hantering för XGBoost-lettermodellen för att visa topp 3 gissningar, baserat på confidence 
+    if model_name == "xgboost_lettermodel.json" and hasattr(model, "predict_proba"):
+        probs = model.predict_proba(pixels)[0]
+        top_3_indices = np.argsort(probs)[-3:][::-1]
+        
+        result_text = ""
+        options = []
+        for i in top_3_indices:
+            confidence = probs[i] * 100
+            display_prediction = chr(int(i) + 65)
+            result_text += f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%\n\n"
+            options.append(display_prediction)
+            
+        return result_text.strip(), options[0], options[1], options[2]
     
     if model_name.endswith(".keras"):
         cnn_pixels = pixels.reshape(1, 28, 28, 1) / 255.0
@@ -157,20 +188,21 @@ def predict_single_model(model_name, pixels):
         display_prediction = str(prediction)
 
     if confidence is not None:
-        return f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%"
+        return f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%", None, None, None
 
-    return f"{model_name} gissar: {display_prediction}"
+    return f"{model_name} gissar: {display_prediction}", None, None, None
 
 
 def predict_all_models(pixels):
     if not loaded_models:
-        return "Inga modeller är inladdade i systemet."
+        return "Inga modeller är inladdade i systemet.", None, None, None
         
     results = []
     for model_name in loaded_models.keys():
-        results.append(predict_single_model(model_name, pixels))
+        res = predict_single_model(model_name, pixels)
+        results.append(res[0])
 
-    return "\n\n".join(results)
+    return "\n\n".join(results), None, None, None
 
 
 with gr.Blocks(title="Teckenigenkänning") as demo:
@@ -230,7 +262,15 @@ with gr.Blocks(title="Teckenigenkänning") as demo:
             
             result = gr.Textbox(
                 label="Resultat från modell"
-        )
+            )
+            
+            # Topp 3 gissningar för bokstavsmodellen
+            with gr.Row():
+                btn_opt1 = gr.Button("Välj 1", visible=False)
+                btn_opt2 = gr.Button("Välj 2", visible=False)
+                btn_opt3 = gr.Button("Välj 3", visible=False)
+                
+            confirmation = gr.Textbox(label="Ditt val: ", visible=False)
 
     btn = gr.Button("Tolka tecken")
 
@@ -240,10 +280,19 @@ with gr.Blocks(title="Teckenigenkänning") as demo:
     )
     
     btn.click(
-        fn=prepare_image,
+        fn=prepare_image, # fn står för "function" och anger vilken funktion som ska köras när knappen klickas
         inputs=[sketchpad, model_choice],
-        outputs=[preview, result]
+        outputs=[preview, result, btn_opt1, btn_opt2, btn_opt3, confirmation]
     )
+    
+    def confirm_choice(btn_text):
+        letter = btn_text.replace("Välj ", "")
+        return gr.update(value=f"Du har valt tecknet: {letter}", visible=True)
+
+    # Lägger till click events för varje knapp som visar topp 3 gissningar, och kopplar dem till confirm_choice-funktionen
+    btn_opt1.click(fn=confirm_choice, inputs=btn_opt1, outputs=confirmation)
+    btn_opt2.click(fn=confirm_choice, inputs=btn_opt2, outputs=confirmation)
+    btn_opt3.click(fn=confirm_choice, inputs=btn_opt3, outputs=confirmation)
 
 
 if __name__ == "__main__":
