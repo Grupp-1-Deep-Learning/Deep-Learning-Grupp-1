@@ -112,7 +112,9 @@ def prepare_image(editor_value, model_choice):
 
     real_model_name = display_to_model.get(model_choice)
     letter_models = (
-        "xgboost_lettermodel.json",'logistic_lettermodel.joblib',"cnn_lettermodel.keras"
+        "xgboost_lettermodel.json",
+        'logistic_lettermodel.joblib',
+        "cnn_lettermodel.keras",
     )
     
     if real_model_name in letter_models:
@@ -174,24 +176,41 @@ def predict_single_model(model_name, pixels):
         return result_text.strip(), options[0], options[1], options[2]
     
     if model_name.endswith(".keras"):
-        cnn_pixels = pixels.reshape(1, 28, 28, 1) / 255.0
-        probs = model.predict(cnn_pixels, verbose=0)[0]
+
+        # CNN model
+        if model_name == "cnn_combined_model.keras":
+            model_pixels = pixels.reshape(1, 28, 28, 1) / 255.0
+
+        # ANN model
+        elif model_name == "ann_model.keras":
+            model_pixels = pixels.reshape(1, 784)
+
+        else:
+            model_pixels = pixels
+
+        probs = model.predict(model_pixels, verbose=0)[0]
         prediction = np.argmax(probs)
         confidence = probs[prediction] * 100
+
     else:
         prediction = model.predict(pixels)[0]
         confidence = None
 
         if hasattr(model, "predict_proba"):
             probs = model.predict_proba(pixels)[0]
-            confidence = probs[int(prediction)] * 100
-            
+            confidence = probs[int(prediction)] * 100  
+
+
     if model_name == "cnn_combined_model.keras":
         if prediction <= 9:
             display_prediction = str(prediction)
         else:
             display_prediction = chr(prediction - 10 + 65)
-
+    elif model_name == "ann_model.keras":
+        if prediction <= 9:
+            display_prediction = str(prediction)
+        else:
+            display_prediction = chr(prediction - 10 + 65)
     elif "letter" in model_name.lower():
         display_prediction = chr(int(prediction) + 65)
     else:
