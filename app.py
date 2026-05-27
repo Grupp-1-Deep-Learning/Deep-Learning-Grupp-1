@@ -185,8 +185,14 @@ def predict_single_model(model_name, pixels):
         if hasattr(model, "predict_proba"):
             probs = model.predict_proba(pixels)[0]
             confidence = probs[int(prediction)] * 100
-    
-    if "letter" in model_name.lower():
+            
+    if model_name == "cnn_combined_model.keras":
+        if prediction <= 9:
+            display_prediction = str(prediction)
+        else:
+            display_prediction = chr(prediction - 10 + 65)
+
+    elif "letter" in model_name.lower():
         display_prediction = chr(int(prediction) + 65)
     else:
         display_prediction = str(prediction)
