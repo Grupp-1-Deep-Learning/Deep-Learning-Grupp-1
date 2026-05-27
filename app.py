@@ -110,11 +110,13 @@ def prepare_image(editor_value, model_choice):
 
     img_28.paste(square_img, (x, y))
 
+    real_model_name = display_to_model.get(model_choice)
     letter_models = (
         "xgboost_lettermodel.json",'logistic_lettermodel.joblib',"cnn_lettermodel.keras"
     )
-
-    if model_choice in letter_models:
+    
+    if real_model_name in letter_models:
+        img_28 = img_28.transpose(Image.Transpose.FLIP_LEFT_RIGHT)  #Flip horizontally
         img_28 = img_28.rotate(90, expand=False)
 
     filename = SAVE_DIR / f"drawing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
@@ -122,7 +124,7 @@ def prepare_image(editor_value, model_choice):
 
     pixels = np.array(img_28).reshape(1, 784)
 
-    model_choice = display_to_model.get(model_choice)
+    model_choice = real_model_name
 
     if model_choice == "Alla modeller":
         prediction, o1, o2, o3 = predict_all_models(pixels)
