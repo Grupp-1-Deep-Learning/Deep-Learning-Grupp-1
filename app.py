@@ -1,15 +1,33 @@
 import gradio as gr
 import numpy as np
 import joblib
+import re
 from PIL import Image
 from pathlib import Path
 from datetime import datetime
 from xgboost import XGBClassifier
 from tensorflow.keras.models import load_model
+from collections import Counter
+
 
 
 SAVE_DIR = Path("saved_drawings")
 SAVE_DIR.mkdir(exist_ok=True)
+
+
+MODEL_ACCURACY = {
+    "random_forest_mnist.joblib": 96.8,
+    "xgboost_mnist.joblib": 97.0,
+    "cnn_combined_model.keras": 98.5,
+    "ann_model.keras": 97.5,
+    "xgboost_lettermodel.json": 88.0,
+    "logistic_lettermodel.joblib": 84.0,
+    "cnn_lettermodel.keras": 92.0,
+    "swe_chars_model.keras": 90.0,
+}
+
+
+
 
 # Kasta din modell i "trained_models"-mappen så laddas den automatiskt när appen startar.
 MODELS_DIR = Path("trained_models") 
@@ -116,22 +134,32 @@ def prepare_image(editor_value, model_choice):
         'logistic_lettermodel.joblib',
         "cnn_lettermodel.keras",
     )
-    
-    if real_model_name in letter_models:
-        img_28 = img_28.transpose(Image.Transpose.FLIP_LEFT_RIGHT)  #Flip horizontally
-        img_28 = img_28.rotate(90, expand=False)
+
 
     filename = SAVE_DIR / f"drawing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
     img_28.save(filename)
 
-    pixels = np.array(img_28).reshape(1, 784)
+    img_28_digit = img_28.copy()
+
+    img_28_letter = img_28.copy()
+    img_28_letter = img_28_letter.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    img_28_letter = img_28_letter.rotate(90, expand=False)
 
     model_choice = real_model_name
 
     if model_choice == "Alla modeller":
-        prediction, o1, o2, o3 = predict_all_models(pixels)
+        prediction, o1, o2, o3 = predict_all_models(img_28_digit, img_28_letter)
+
     elif model_choice in loaded_models:
+        if model_choice in letter_models:
+            pixels = np.array(img_28_letter).reshape(1, 784)
+            preview_img = img_28_letter
+        else:
+            pixels = np.array(img_28_digit).reshape(1, 784)
+            preview_img = img_28_digit
+
         prediction, o1, o2, o3 = predict_single_model(model_choice, pixels)
+        img_28 = preview_img
     else:
         prediction, o1, o2, o3 = "Ingen modell vald eller modellen hittades inte.", None, None, None
 
@@ -266,18 +294,132 @@ def predict_single_model(model_name, pixels):
     return f"{model_name} gissar: {display_prediction}", None, None, None
 
 
-def predict_all_models(pixels):
+def extract_prediction(result_text):
+    """
+    Plockar ut första gissningen från text som:
+    'modellnamn gissar: A'
+    """
+    match = re.search(r"gissar:\s*(\S+)", result_text)
+    if match:
+        return match.group(1)
+    return None
+
+def is_digit_prediction(prediction):
+    return prediction.isdigit()
+
+
+def is_letter_prediction(prediction):
+    return prediction.isalpha() and prediction.lower() != "null"
+
+
+def is_digit_model(model_name):
+    return "digit" in model_name or "mnist" in model_name
+
+
+def is_letter_model(model_name):
+    return "letter" in model_name
+
+
+def get_model_group(model_name):
+    if is_letter_model(model_name):
+        return "letter"
+    if is_digit_model(model_name):
+        return "digit"
+    return "combined"
+
+def predict_all_models(img_28_digit, img_28_letter):
     if not loaded_models:
         return "Inga modeller är inladdade i systemet.", None, None, None
-        
-    results = []
+
+    all_texts = []
+    votes = []
+    weighted_scores = {}
+
+    letter_models = (
+        "xgboost_lettermodel.json",
+        "logistic_lettermodel.joblib",
+        "cnn_lettermodel.keras",
+    )
 
     for model_name in loaded_models.keys():
-        res = predict_single_model(model_name, pixels)
-        results.append(res[0])
 
-    return "\n\n".join(results), None, None, None
+        if model_name in letter_models:
+            pixels = np.array(img_28_letter).reshape(1, 784)
+        else:
+            pixels = np.array(img_28_digit).reshape(1, 784)
 
+        result_text, _, _, _ = predict_single_model(model_name, pixels)
+
+        all_texts.append(result_text)
+
+        prediction = extract_prediction(result_text)
+
+        if prediction is not None and prediction.lower() != "null":
+            group = get_model_group(model_name)
+
+            accuracy = MODEL_ACCURACY.get(model_name, 90)
+
+            if group == "letter":
+                group_size = sum(1 for name in loaded_models if get_model_group(name) == "letter")
+            elif group == "digit":
+                group_size = sum(1 for name in loaded_models if get_model_group(name) == "digit")
+            else:
+                group_size = 1
+
+            group_size = max(group_size, 1)
+
+            normalized_score = accuracy / group_size
+
+            votes.append(prediction)
+
+            weighted_scores[prediction] = (
+                weighted_scores.get(prediction, 0) + normalized_score
+            )
+
+    if not votes:
+        return "\n\n".join(all_texts), None, None, None
+
+    vote_count = Counter(votes)
+
+    digit_votes = [v for v in votes if is_digit_prediction(v)]
+    letter_votes = [v for v in votes if is_letter_prediction(v)]
+
+    digit_count = Counter(digit_votes)
+    letter_count = Counter(letter_votes)
+
+    best_digit = digit_count.most_common(1)[0][0] if digit_count else None
+    best_letter = letter_count.most_common(1)[0][0] if letter_count else None
+
+
+    # Vid lika röster -> högst accuracy-vikt
+    final_prediction = max(
+        weighted_scores,
+        key=weighted_scores.get
+    )
+
+    summary = "🧠 Sammanvägt resultat\n"
+    summary += f"Slutlig gissning: {final_prediction}\n"
+    summary += f"Viktad score: {weighted_scores[final_prediction]:.1f}\n\n"
+
+    if best_letter:
+        summary += f"Bästa bokstav: {best_letter} ({letter_count[best_letter]} röster)\n"
+
+    if best_digit:
+        summary += f"Bästa siffra: {best_digit} ({digit_count[best_digit]} röster)\n"
+
+    summary += "\n📊 Alla röster:\n"
+
+    for prediction, count in vote_count.most_common():
+        summary += (
+            f"{prediction}: "
+            f"{count} röst(er), "
+            f"score {weighted_scores[prediction]:.1f}\n"
+        )
+
+    summary += "\n--- Alla modeller ---\n\n"
+    summary += "\n\n".join(all_texts)
+
+    return summary, None, None, None
 
 # Mapping mellan snyggt namn och riktigt filnamn
 display_to_model = {}
