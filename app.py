@@ -26,7 +26,9 @@ MODEL_ACCURACY = {
     "swe_chars_model.keras": 90.0,
 }
 
-
+LETTER_GROUP_BOOST = 1.35
+DIGIT_GROUP_BOOST = 1.0
+COMBINED_GROUP_BOOST = 1.0
 
 
 # Kasta din modell i "trained_models"-mappen så laddas den automatiskt när appen startar.
@@ -368,7 +370,14 @@ def predict_all_models(img_28_digit, img_28_letter):
 
             group_size = max(group_size, 1)
 
-            normalized_score = accuracy / group_size
+            if group == "letter":
+                group_boost = LETTER_GROUP_BOOST
+            elif group == "digit":
+                group_boost = DIGIT_GROUP_BOOST
+            else:
+                group_boost = COMBINED_GROUP_BOOST
+
+            normalized_score = (accuracy / group_size) * group_boost
 
             votes.append(prediction)
 
