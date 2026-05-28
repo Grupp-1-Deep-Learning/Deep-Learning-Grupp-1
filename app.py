@@ -283,8 +283,10 @@ def predict_single_model(model_name, pixels):
     elif model_name == "ann_model.keras":
         if prediction <= 9:
             display_prediction = str(prediction)
+        elif prediction <= 35:
+            display_prediction = chr(prediction - 10 + ord("A"))
         else:
-            display_prediction = chr(prediction - 10 + 65)
+            display_prediction = chr(prediction - 36 + ord("a"))
     elif "letter" in model_name.lower():
         display_prediction = chr(int(prediction) + 65)
     else:
