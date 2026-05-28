@@ -46,7 +46,7 @@ def reset_canvas(): # Den här funktionen nollställer canvas, behövs för att 
 
 def prepare_image(editor_value, model_choice):
     """
-    Tar bilden från Gradio ImageEditor,
+    Tar Bildern från Gradio ImageEditor,
     beskär bort tom yta,
     centrerar tecknet,
     gör om till 28x28 = 784 pixlar,
@@ -135,13 +135,13 @@ def prepare_image(editor_value, model_choice):
     else:
         prediction, o1, o2, o3 = "Ingen modell vald eller modellen hittades inte.", None, None, None
 
-    if o1 is not None:
+    if o1 is not None and o1 != "":
         return (
             img_28, 
             prediction, 
             gr.update(value=f"Välj {o1}", visible=True),
-            gr.update(value=f"Välj {o2}", visible=True),
-            gr.update(value=f"Välj {o3}", visible=True),
+            gr.update(value=f"Välj {o2}", visible=(o2 != "")),
+            gr.update(value=f"Välj {o3}", visible=(o3 != "")),
             gr.update(value="", visible=False)
         )
     else:
@@ -178,17 +178,61 @@ def predict_single_model(model_name, pixels):
     if model_name.endswith(".keras"):
 
         # CNN model
-        if model_name == "cnn_combined_model.keras":
+        if model_name == "cnn_combined_model.keras" or "cnn" in model_name or "swe_chars" in model_name:
             model_pixels = pixels.reshape(1, 28, 28, 1) / 255.0
 
         # ANN model
-        elif model_name == "ann_model.keras":
+        elif model_name == "ann_model.keras" or "ann" in model_name:
             model_pixels = pixels.reshape(1, 784)
 
         else:
             model_pixels = pixels
 
         probs = model.predict(model_pixels, verbose=0)[0]
+        
+        # Snabbt spår för swe_chars_model.keras (Bara 1 bästa gissning, inga valknappar)
+        if "swe_chars" in model_name:
+            prediction = np.argmax(probs)
+            confidence = probs[prediction] * 100
+            swe_mapping = {0: 'Å', 1: 'Ä', 2: 'Ö', 3: 'å', 4: 'ä', 5: 'ö', 6: 'null'}
+            legacy_mapping = {0: 'å', 1: 'ä', 2: 'ö'}
+            
+            if len(probs) >= 6:
+                display_prediction = swe_mapping.get(int(prediction), str(prediction))
+            elif len(probs) == 3:
+                display_prediction = legacy_mapping.get(int(prediction), str(prediction))
+            else:
+                display_prediction = str(prediction)
+                
+            return f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%", None, None, None
+
+        # Speciell hantering för CNN Combined och ANN för att visa topp 3 gissningar
+        if model_name == "cnn_combined_model.keras" or model_name == "ann_model.keras" or "cnn" in model_name:
+            top_3_indices = np.argsort(probs)[-3:][::-1]
+            
+            result_text = ""
+            options = []
+            for i in top_3_indices:
+                confidence = probs[i] * 100
+                
+                if "digit" in model_name:
+                    display_prediction = str(i)
+                elif "letter" in model_name:
+                    display_prediction = chr(int(i) + 65)
+                else:
+                    if i <= 9:
+                        display_prediction = str(i)
+                    else:
+                        display_prediction = chr(i - 10 + 65)
+                
+                result_text += f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%\n\n"
+                options.append(display_prediction)
+                
+            while len(options) < 3:
+                options.append("")
+                
+            return result_text.strip(), options[0], options[1], options[2]
+
         prediction = np.argmax(probs)
         confidence = probs[prediction] * 100
 
