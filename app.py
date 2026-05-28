@@ -249,6 +249,13 @@ def predict_single_model(model_name, pixels):
                     display_prediction = str(i)
                 elif "letter" in model_name:
                     display_prediction = chr(int(i) + 65)
+                elif model_name == "ann_model.keras":
+                    if i <= 9:
+                        display_prediction = str(i)
+                    elif i <= 35:
+                        display_prediction = chr(i - 10 + ord("A"))
+                    else:  # 36-61 → lowercase
+                        display_prediction = chr(i - 36 + ord("a"))
                 else:
                     if i <= 9:
                         display_prediction = str(i)
