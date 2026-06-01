@@ -31,7 +31,7 @@ DIGIT_GROUP_BOOST = 1.0
 COMBINED_GROUP_BOOST = 1.0
 
 
-# Kasta din modell i "trained_models"-mappen så laddas den automatiskt när appen startar.
+# Kasta din modell i "trained_models" mappen, så laddas den automatiskt när appen startar.
 MODELS_DIR = Path("trained_models") 
 loaded_models = {}
 
@@ -52,7 +52,13 @@ if MODELS_DIR.exists() and MODELS_DIR.is_dir():
                     pass
             elif model_path.suffix == ".keras":
                 try:
-                    loaded_models[model_path.name] = load_model(model_path)
+                    model = load_model(model_path)
+                    loaded_models[model_path.name] = model
+                    # Warm-up för att förhindra fördröjning vid första klicket
+                    if "cnn" in model_path.name or "swe_chars" in model_path.name:
+                        model.predict(np.zeros((1, 28, 28, 1)), verbose=0)
+                    elif "ann" in model_path.name:
+                        model.predict(np.zeros((1, 784)), verbose=0)
                 except Exception:
                     pass
 
@@ -74,7 +80,7 @@ def prepare_image(editor_value, model_choice):
     """
 
     if editor_value is None or editor_value.get("composite") is None:
-        return None, "Rita ett tecken först 🙂", gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+        return None, "Rita ett tecken först 🙂", gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
 
     img = editor_value["composite"]
 
@@ -98,7 +104,7 @@ def prepare_image(editor_value, model_choice):
     coords = np.argwhere(arr > 0)
 
     if coords.size == 0:
-        return None, "Jag hittar inget ritat tecken 🙂", gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+        return None, "Jag hittar inget ritat tecken 🙂", gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
 
     # Bounding box runt tecknet
     y0, x0 = coords.min(axis=0)
@@ -170,9 +176,8 @@ def prepare_image(editor_value, model_choice):
             img_28, 
             prediction, 
             gr.update(value=f"Välj {o1}", visible=True),
-            gr.update(value=f"Välj {o2}", visible=(o2 != "")),
-            gr.update(value=f"Välj {o3}", visible=(o3 != "")),
-            gr.update(value="", visible=False)
+            gr.update(value=f"Välj {o2}" if o2 else "", visible=bool(o2)),
+            gr.update(value=f"Välj {o3}" if o3 else "", visible=bool(o3))
         )
     else:
         return (
@@ -180,8 +185,7 @@ def prepare_image(editor_value, model_choice):
             prediction, 
             gr.update(visible=False),
             gr.update(visible=False),
-            gr.update(visible=False),
-            gr.update(value="", visible=False)
+            gr.update(visible=False)
         )
 
 
@@ -220,21 +224,40 @@ def predict_single_model(model_name, pixels):
 
         probs = model.predict(model_pixels, verbose=0)[0]
         
-        # Snabbt spår för swe_chars_model.keras (Bara 1 bästa gissning, inga valknappar)
+        # Snabbt spår för swe_chars_model.keras
         if "swe_chars" in model_name:
-            prediction = np.argmax(probs)
-            confidence = probs[prediction] * 100
             swe_mapping = {0: 'Å', 1: 'Ä', 2: 'Ö', 3: 'å', 4: 'ä', 5: 'ö', 6: 'null'}
-            legacy_mapping = {0: 'å', 1: 'ä', 2: 'ö'}
-            
-            if len(probs) >= 6:
-                display_prediction = swe_mapping.get(int(prediction), str(prediction))
-            elif len(probs) == 3:
-                display_prediction = legacy_mapping.get(int(prediction), str(prediction))
-            else:
-                display_prediction = str(prediction)
+            mapping_to_use = swe_mapping
+
+            if mapping_to_use:
+                best_idx = np.argmax(probs)
+                best_char = mapping_to_use.get(int(best_idx), str(best_idx))
                 
-            return f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%", None, None, None
+                if best_char.lower() == "null":
+                    conf = probs[best_idx] * 100
+                    return f"{model_name} gissar: null\nSäkerhet: {conf:.1f}%", None, None, None
+                
+                top_indices = np.argsort(probs)[::-1]
+                valid_options = []
+                result_text = ""
+                
+                for idx in top_indices:
+                    char = mapping_to_use.get(int(idx), str(idx))
+                    if char.lower() != "null":
+                        conf = probs[idx] * 100
+                        if idx == best_idx or conf >= 20.0:
+                            result_text += f"{model_name} gissar: {char}\nSäkerhet: {conf:.1f}%\n\n"
+                            valid_options.append(char)
+                
+                while len(valid_options) < 3:
+                    valid_options.append(None)
+                    
+                return result_text.strip(), valid_options[0], valid_options[1], valid_options[2]
+            else:
+                prediction = np.argmax(probs)
+                confidence = probs[prediction] * 100
+                display_prediction = str(prediction)
+                return f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%", None, None, None
 
         # Speciell hantering för CNN Combined och ANN för att visa topp 3 gissningar
         if model_name == "cnn_combined_model.keras" or model_name == "ann_model.keras" or "cnn" in model_name:
@@ -342,6 +365,18 @@ def predict_all_models(img_28_digit, img_28_letter):
     if not loaded_models:
         return "Inga modeller är inladdade i systemet.", None, None, None
 
+    # Ifall swe_chars har en träffm då ska den vara exklusiv
+    if "swe_chars_model.keras" in loaded_models:
+        pixels = np.array(img_28_digit).reshape(1, 784)
+        res_txt, o1, o2, o3 = predict_single_model("swe_chars_model.keras", pixels)
+        pred = extract_prediction(res_txt)
+        if pred and pred.lower() != "null":
+            summary = "🧠 Sammanvägt resultat\n"
+            summary += f"Slutlig gissning (Swe Chars): {pred}\n\n"
+            summary += "--- Endast Swe Chars Modell ---\n\n"
+            summary += res_txt
+            return summary, o1, o2, o3
+
     all_texts = []
     votes = []
     weighted_scores = {}
@@ -437,7 +472,12 @@ def predict_all_models(img_28_digit, img_28_letter):
     summary += "\n--- Alla modeller ---\n\n"
     summary += "\n\n".join(all_texts)
 
-    return summary, None, None, None
+    sorted_options = sorted(weighted_scores.keys(), key=lambda x: weighted_scores[x], reverse=True)
+    opt1 = sorted_options[0] if len(sorted_options) > 0 else None
+    opt2 = sorted_options[1] if len(sorted_options) > 1 else None
+    opt3 = sorted_options[2] if len(sorted_options) > 2 else None
+
+    return summary, opt1, opt2, opt3
 
 # Mapping mellan snyggt namn och riktigt filnamn
 display_to_model = {}
@@ -524,9 +564,12 @@ with gr.Blocks(
                     btn_opt2 = gr.Button("Välj 2", visible=False)
                     btn_opt3 = gr.Button("Välj 3", visible=False)
 
-                confirmation = gr.Textbox(label="Ditt val: ", visible=False)
-
             with gr.Column(elem_classes=["app-panel", "result-column"]):
+                text_input = gr.Textbox(
+                    label="Sparade tecken", 
+                    interactive=True
+                )
+                
                 preview = gr.Image(
                     label="Sparad 28x28-bild",
                     height=120,
@@ -544,20 +587,27 @@ with gr.Blocks(
         outputs=sketchpad
     )
     
+    # Kör prepare_image och kedjar sedan en .then() för att garantera UI-uppdatering och synkronisering på skärmen direkt vid första klicket
     btn.click(
         fn=prepare_image, # fn står för "function" och anger vilken funktion som ska köras när knappen klickas
         inputs=[sketchpad, model_choice],
-        outputs=[preview, result, btn_opt1, btn_opt2, btn_opt3, confirmation]
+        outputs=[preview, result, btn_opt1, btn_opt2, btn_opt3]
+    ).then(
+        fn=lambda: (gr.update(), gr.update(), gr.update()),
+        inputs=None,
+        outputs=[btn_opt1, btn_opt2, btn_opt3]
     )
     
-    def confirm_choice(btn_text):
+    def append_choice(current_text, btn_text):
+        if current_text is None:
+            current_text = ""
         letter = btn_text.replace("Välj ", "")
-        return gr.update(value=f"Du har valt tecknet: {letter}", visible=True)
+        return current_text + letter
 
-    # Lägger till click events för varje knapp som visar topp 3 gissningar, och kopplar dem till confirm_choice-funktionen
-    btn_opt1.click(fn=confirm_choice, inputs=btn_opt1, outputs=confirmation)
-    btn_opt2.click(fn=confirm_choice, inputs=btn_opt2, outputs=confirmation)
-    btn_opt3.click(fn=confirm_choice, inputs=btn_opt3, outputs=confirmation)
+    # Lägger till click events för varje knapp som visar gissningarna, så att de kan sparas i textinput
+    btn_opt1.click(fn=append_choice, inputs=[text_input, btn_opt1], outputs=text_input)
+    btn_opt2.click(fn=append_choice, inputs=[text_input, btn_opt2], outputs=text_input)
+    btn_opt3.click(fn=append_choice, inputs=[text_input, btn_opt3], outputs=text_input)
 
 
 if __name__ == "__main__":
