@@ -2,6 +2,8 @@ import gradio as gr
 import numpy as np
 import joblib
 import re
+import base64
+from io import BytesIO
 from PIL import Image
 from pathlib import Path
 from datetime import datetime
@@ -23,7 +25,7 @@ MODEL_ACCURACY = {
     "xgboost_lettermodel.json": 88.0,
     "logistic_lettermodel.joblib": 84.0,
     "cnn_lettermodel.keras": 92.0,
-    "swe_chars_model.keras": 90.0,
+    #"swe_chars_model.keras": 90.0,
 }
 
 LETTER_GROUP_BOOST = 1.35
@@ -187,6 +189,32 @@ def prepare_image(editor_value, model_choice):
             gr.update(visible=False),
             gr.update(visible=False)
         )
+
+
+def create_crop_tool_html(img_filepath):
+    """
+    Bygger en HTML-kod med JavaScript som skapar en dynamisk markeringsruta ovanpå den uppladdade bilden.
+    När musen släpps, konverteras det markerade området till base64 och skickas till de dolda Python-komponenterna.
+    """
+    if img_filepath is None:
+        return ""
+    
+    try:
+        img = Image.open(img_filepath)
+        buffered = BytesIO()
+        img.save(buffered, format="PNG")
+        img_b64 = base64.b64encode(buffered.getvalue()).decode()
+    except Exception:
+        return ""
+    
+    uid = int(datetime.now().timestamp() * 1000)
+    
+    try:
+        with open("gradio.html", "r", encoding="utf-8") as f:
+            html_template = f.read()
+            return html_template.replace("{uid}", str(uid)).replace("{img_b64}", img_b64)
+    except FileNotFoundError:
+        return "<p>gradio.html hittades inte.</p>"
 
 
 def predict_single_model(model_name, pixels):
@@ -479,6 +507,7 @@ def predict_all_models(img_28_digit, img_28_letter):
 
     return summary, opt1, opt2, opt3
 
+
 # Mapping mellan snyggt namn och riktigt filnamn
 display_to_model = {}
 
@@ -505,7 +534,7 @@ else:
     default_value = "Alla modeller"
 
 with gr.Blocks(
-    title="Teckenigenkänning"
+    title="Teckenigenkänning",
 ) as demo:
 
     with gr.Column(elem_id="app-wrapper"):
@@ -523,25 +552,51 @@ with gr.Blocks(
         with gr.Row(equal_height=True, elem_classes="main-row"):
 
             with gr.Column(elem_classes=["app-panel", "draw-column"]):
-                sketchpad = gr.ImageEditor(
-                    label="Rita tecken här",
-                    type="pil",
-                    image_mode="L",
-                    sources=(),
-                    interactive=True,
-                    brush=gr.Brush(
-                        colors=["#FFFFFF"],
-                        default_color="#FFFFFF",
-                        color_mode="fixed",
-                        default_size=10
-                    ),
-                    eraser=gr.Eraser(default_size=20),
-                    height=320,
-                    width=320,
-                    canvas_size=(320, 320),
-                    layers=False,
-                    value=reset_canvas()
+                input_mode = gr.Radio(
+                    choices=["Rita", "Bild"],
+                    value="Rita",
+                    label="Inmatningsläge",
+                    interactive=True
                 )
+
+                with gr.Column(visible=True) as draw_container:
+                    sketchpad = gr.ImageEditor(
+                        label="Rita tecken här",
+                        type="pil",
+                        image_mode="L",
+                        sources=(),
+                        interactive=True,
+                        brush=gr.Brush(
+                            colors=["#FFFFFF"],
+                            default_color="#FFFFFF",
+                            color_mode="fixed",
+                            default_size=10
+                        ),
+                        eraser=gr.Eraser(default_size=20),
+                        height=320,
+                        width=320,
+                        canvas_size=(320, 320),
+                        layers=False,
+                        value=reset_canvas()
+                    )
+
+                with gr.Column(visible=False) as image_container:
+                    # En ren uppladdningskomponent för bilden
+                    upload_pic = gr.Image(
+                        label="Ladda upp eller klistra in bild",
+                        type="filepath",
+                        sources=["upload", "clipboard"],
+                        interactive=True,
+                        height=180
+                    )
+                    
+                    # HTML-komponenten som visar bilden med JS-baserade screenshot verktyg
+                    custom_crop_html = gr.HTML()
+                    
+                    # Dolda komponenter för stabil kommunikation, hålls vid liv i ett litet osynligt element
+                    with gr.Column(elem_id="hidden-crop-container"):
+                        hidden_crop = gr.Textbox(elem_id="hidden-crop")
+                        hidden_btn = gr.Button("Dold Knapp", elem_id="hidden-btn")
 
             with gr.Column(elem_classes=["middle-column"]):
 
@@ -582,22 +637,132 @@ with gr.Blocks(
                     elem_classes="result-box"
                 )
 
+    def change_input_mode(mode):
+        if mode == "Rita":
+            return gr.update(visible=True), gr.update(visible=False), gr.update(visible=True)
+        else:
+            return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
+
+    input_mode.change(
+        fn=change_input_mode,
+        inputs=input_mode,
+        outputs=[draw_container, image_container, btn]
+    )
+
     sketchpad.clear( # Kallar på clear
         fn=reset_canvas,
         outputs=sketchpad
     )
     
-    # Kör prepare_image och kedjar sedan en .then() för att garantera UI-uppdatering och synkronisering på skärmen direkt vid första klicket
     btn.click(
-        fn=prepare_image, # fn står för "function" och anger vilken funktion som ska köras när knappen klickas
+        fn=prepare_image, # fn står för "function" 
         inputs=[sketchpad, model_choice],
         outputs=[preview, result, btn_opt1, btn_opt2, btn_opt3]
-    ).then(
-        fn=lambda: (gr.update(), gr.update(), gr.update()),
-        inputs=None,
-        outputs=[btn_opt1, btn_opt2, btn_opt3]
     )
     
+    # Renderar javascript cropverktyg när en bild laddas upp
+    upload_pic.change(
+        fn=create_crop_tool_html,
+        inputs=upload_pic,
+        outputs=custom_crop_html
+    )
+
+    # Den dolda knappen som triggas av JavaScript för att anropa custom crop
+    def call_crop(b64, choice):
+        empty_img = Image.new("L", (28, 28), 0)
+        
+        if not b64 or not b64.startswith("data:image"):
+            return empty_img, "Markera ett område först 🙂", gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+            
+        try:
+            header, encoded = b64.split(",", 1)
+            data = base64.b64decode(encoded)
+            img = Image.open(BytesIO(data))
+        except Exception as e:
+            return empty_img, f"Fel vid tolkning av beskuren bild: {e}", gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+
+        img_L = img.convert("L")
+        arr = np.array(img_L)
+
+        # OM den uppladdade bilden / klippet har en ljus bakgrund och mörk text -> invertera (vitt på svart)
+        if arr.mean() > 127:
+            arr = 255 - arr
+
+        # Adaptiv threshold för att fånga upp svag text utan att bruset tar över
+        threshold = min(30, np.percentile(arr, 95) * 0.4) if arr.max() > 0 else 30
+        arr[arr < threshold] = 0
+
+        coords = np.argwhere(arr > 0)
+        if coords.size == 0:
+            return empty_img, "Jag hittar inget tecken i det markerade området 🙂", gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+
+        y0, x0 = coords.min(axis=0)
+        y1, x1 = coords.max(axis=0)
+        cropped = arr[y0:y1 + 1, x0:x1 + 1]
+
+        h, w = cropped.shape
+        size = max(h, w)
+        square = np.zeros((size, size), dtype=np.uint8)
+
+        y_offset = (size - h) // 2
+        x_offset = (size - w) // 2
+        square[y_offset:y_offset + h, x_offset:x_offset + w] = cropped
+
+        square_img = Image.fromarray(square)
+        square_img.thumbnail((20, 20), Image.Resampling.LANCZOS)
+
+        img_28 = Image.new("L", (28, 28), 0)
+        x = (28 - square_img.width) // 2
+        y = (28 - square_img.height) // 2
+        img_28.paste(square_img, (x, y))
+
+        real_model_name = display_to_model.get(choice)
+        letter_models = (
+            "xgboost_lettermodel.json",
+            'logistic_lettermodel.joblib',
+            "cnn_lettermodel.keras",
+        )
+
+        filename = SAVE_DIR / f"drawing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        img_28.save(filename)
+
+        img_28_digit = img_28.copy()
+        img_28_letter = img_28.copy()
+        img_28_letter = img_28_letter.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+        img_28_letter = img_28_letter.rotate(90, expand=False)
+
+        model_choice_name = real_model_name
+
+        if model_choice_name == "Alla modeller":
+            prediction, o1, o2, o3 = predict_all_models(img_28_digit, img_28_letter)
+        elif model_choice_name in loaded_models:
+            if model_choice_name in letter_models:
+                pixels = np.array(img_28_letter).reshape(1, 784)
+                preview_img = img_28_letter
+            else:
+                pixels = np.array(img_28_digit).reshape(1, 784)
+                preview_img = img_28_digit
+
+            prediction, o1, o2, o3 = predict_single_model(model_choice_name, pixels)
+            img_28 = preview_img
+        else:
+            prediction, o1, o2, o3 = "Ingen modell vald eller modellen hittades inte.", None, None, None
+
+        if o1 is not None and o1 != "":
+            up1 = gr.update(value=f"Välj {o1}", visible=True)
+            up2 = gr.update(value=f"Välj {o2}" if o2 else "", visible=bool(o2))
+            up3 = gr.update(value=f"Välj {o3}" if o3 else "", visible=bool(o3))
+        else:
+            up1, up2, up3 = gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+
+        return img_28, prediction, up1, up2, up3
+
+    hidden_btn.click(
+        fn=call_crop,
+        inputs=[hidden_crop, model_choice],
+        outputs=[preview, result, btn_opt1, btn_opt2, btn_opt3]
+    )
+
     def append_choice(current_text, btn_text):
         if current_text is None:
             current_text = ""
@@ -611,4 +776,5 @@ with gr.Blocks(
 
 
 if __name__ == "__main__":
+    #demo.launch()
     demo.launch(css_paths="style.css")

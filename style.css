@@ -18,6 +18,32 @@ body {
     background-attachment: fixed;
 }
 
+#hidden-crop-container {
+    height: 0px !important;
+    width: 0px !important;
+    overflow: hidden !important;
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    left: -9999px;
+}
+
+.main-title {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 15px;
+}
+
+.result-box textarea {
+    font-family: monospace;
+}
+
 .gradio-container {
     max-width: 1250px !important;
     margin: auto !important;

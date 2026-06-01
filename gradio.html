@@ -1,0 +1,107 @@
+<div style="text-align:center; width: 100%; margin-top: 15px;">
+    <p style="margin-bottom: 8px; font-weight: bold; color: #555;">Dra en ruta över en bokstav för att direkt tolka som skärmklipp!</p>
+    <div id="crop-container-{uid}" style="position:relative; display:inline-block; cursor: crosshair; user-select: none; border: 1px dashed #ccc; border-radius: 4px; overflow: hidden; max-width: 100%;">
+        <img id="crop-source-{uid}" src="data:image/png;base64,{img_b64}" 
+             style="max-width:100%; max-height: 50vh; display:block; pointer-events: none;" 
+             draggable="false"
+             onload="
+                if(this.dataset.initialized) return;
+                this.dataset.initialized = 'true';
+                
+                const container = document.getElementById('crop-container-{uid}');
+                const img = this;
+                
+                // Skapa den rörliga markeringsrutan
+                const box = document.createElement('div');
+                box.style.cssText = 'position:absolute; border:2px dashed #ff0055; background: rgba(255, 0, 85, 0.15); display:none; pointer-events: none; z-index: 10;';
+                container.appendChild(box);
+
+                let isDrawing = false;
+                let startX, startY;
+
+                container.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    const rect = container.getBoundingClientRect();
+                    startX = e.clientX - rect.left;
+                    startY = e.clientY - rect.top;
+                    box.style.left = startX + 'px';
+                    box.style.top = startY + 'px';
+                    box.style.width = '0px';
+                    box.style.height = '0px';
+                    box.style.display = 'block';
+                    isDrawing = true;
+                });
+
+                const moveHandler = (e) => {
+                    if(!isDrawing) return;
+                    e.preventDefault();
+                    const rect = container.getBoundingClientRect();
+                    let currentX = e.clientX - rect.left;
+                    let currentY = e.clientY - rect.top;
+                    
+                    // Klämmer fast koordinaterna så boxen inte går utanför bilden
+                    currentX = Math.max(0, Math.min(currentX, rect.width));
+                    currentY = Math.max(0, Math.min(currentY, rect.height));
+
+                    const width = Math.abs(currentX - startX);
+                    const height = Math.abs(currentY - startY);
+                    const left = Math.min(currentX, startX);
+                    const top = Math.min(currentY, startY);
+
+                    box.style.width = width + 'px';
+                    box.style.height = height + 'px';
+                    box.style.left = left + 'px';
+                    box.style.top = top + 'px';
+                };
+
+                const finishCrop = (e) => {
+                    if(!isDrawing) return;
+                    isDrawing = false;
+                    
+                    const rect = img.getBoundingClientRect();
+                    const scaleX = img.naturalWidth / rect.width;
+                    const scaleY = img.naturalHeight / rect.height;
+
+                    const boxRect = box.getBoundingClientRect();
+                    const cropX = (boxRect.left - rect.left) * scaleX;
+                    const cropY = (boxRect.top - rect.top) * scaleY;
+                    const cropW = boxRect.width * scaleX;
+                    const cropH = boxRect.height * scaleY;
+
+                    // Om området är tillräckligt stort, gör utskäret
+                    if(cropW > 5 && cropH > 5) {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = cropW;
+                        canvas.height = cropH;
+                        const ctx = canvas.getContext('2d');
+                        
+                        // Vit bakgrund så att transparenta bilder inte blir svarta
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(0, 0, cropW, cropH);
+                        ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+                        
+                        const base64Crop = canvas.toDataURL('image/png');
+                        
+                        const hiddenInput = document.querySelector('#hidden-crop textarea');
+                        const hiddenBtn = document.querySelector('#hidden-btn');
+                        
+                        if(hiddenInput && hiddenBtn) {
+                            hiddenInput.value = base64Crop;
+                            // Tvinga Gradio (Svelte) att registrera uppdateringen
+                            hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            
+                            // Använd knappen istället för .change() på textfältet för att kringgå Gradio 4 reactivity loops
+                            setTimeout(() => { hiddenBtn.click(); }, 50);
+                        }
+                    }
+                    
+                    setTimeout(() => { box.style.display = 'none'; }, 200);
+                };
+
+                container.addEventListener('mousemove', moveHandler);
+                container.addEventListener('mouseup', finishCrop);
+                container.addEventListener('mouseleave', finishCrop);
+             "
+        >
+    </div>
+</div>
