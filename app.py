@@ -300,7 +300,7 @@ def predict_single_model(model_name, pixels):
                     display_prediction = str(i)
                 elif "letter" in model_name:
                     display_prediction = chr(int(i) + 65)
-                elif model_name == "ann_model.keras":
+                elif model_name == "ann_model.keras" or model_name == "cnn_combined_model.keras":
                     if i <= 9:
                         display_prediction = str(i)
                     elif i <= 35:
@@ -332,13 +332,7 @@ def predict_single_model(model_name, pixels):
             probs = model.predict_proba(pixels)[0]
             confidence = probs[int(prediction)] * 100  
 
-
-    if model_name == "cnn_combined_model.keras":
-        if prediction <= 9:
-            display_prediction = str(prediction)
-        else:
-            display_prediction = chr(prediction - 10 + 65)
-    elif model_name == "ann_model.keras":
+    if model_name == "ann_model.keras" or model_name == "cnn_combined_model.keras":
         if prediction <= 9:
             display_prediction = str(prediction)
         elif prediction <= 35:

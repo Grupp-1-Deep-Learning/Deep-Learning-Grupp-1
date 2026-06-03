@@ -3,11 +3,14 @@ import numpy as np
 import os
 
 from PIL import Image
-from sklearn.model_selection import train_test_split
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
 
+TRAIN_FILE = "emnist-byclass-train.csv"
+TEST_FILE = "emnist-byclass-test.csv"
+MODEL_SAVE_PATH = "trained_models/cnn_combined_model.keras"
+NUM_CLASSES = 62
 
 def load_dataset(file_path):
     df = pd.read_csv(file_path)
@@ -15,10 +18,10 @@ def load_dataset(file_path):
     X = df.iloc[:, 1:].to_numpy(dtype=np.float32)
     return X, y
 
-def fix_emnist_letters_orientation(X_letters):
-    X_letters = X_letters.reshape(-1, 28, 28)
+def fix_emnist_orientation(X):
+    X= X.reshape(-1, 28, 28)
     fixed_images = []
-    for img in X_letters:
+    for img in X:
         pil_img = Image.fromarray(img.astype(np.uint8))
         pil_img = pil_img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
         pil_img = pil_img.rotate(90, expand=False)
@@ -33,12 +36,14 @@ def build_cnn_model():
         Conv2D(64, (3, 3), activation="relu"),
         MaxPooling2D((2, 2)),
 
+        Conv2D(128, (3, 3), activation="relu"),
+
         Flatten(),
 
-        Dense(128, activation="relu"),
+        Dense(256, activation="relu"),
         Dropout(0.3),
 
-        Dense(36, activation="softmax")
+        Dense(NUM_CLASSES, activation="softmax")
     ])
 
     model.compile(optimizer="adam",loss="sparse_categorical_crossentropy",metrics=["accuracy"])
@@ -48,36 +53,32 @@ def build_cnn_model():
 
 os.makedirs("trained_models", exist_ok=True)
 
-print("Loading MNIST digits...")
-X_digits, y_digits = load_dataset("mnist_combined.csv")
+print("Loading EMNIST ByClass train dataset...")
+X_train, y_train = load_dataset(TRAIN_FILE)
 
-print("Loading EMNIST letters...")
-X_letters, y_letters = load_dataset("emnist_combined_letters.csv")
+print("Loading EMNIST ByClass test dataset...")
+X_test, y_test = load_dataset(TEST_FILE)
 
-print("Fixing EMNIST letter orientation...")
-X_letters = fix_emnist_letters_orientation(X_letters)
+print("Fixing EMNIST orientation...")
+X_train = fix_emnist_orientation(X_train)
+X_test = fix_emnist_orientation(X_test)
 
-# Digits: 0-9
-# EMNIST letters: 1-26
-# Convert letters to 10-35
-y_letters = y_letters - 1
-y_letters = y_letters + 10
+print("Normalizing images...")
+X_train = X_train / 255.0
+X_test = X_test / 255.0
 
-print("Combining datasets...")
-X = np.vstack([X_digits, X_letters])
-y = np.concatenate([y_digits, y_letters])
+print("Reshaping images for CNN...")
+X_train = X_train.reshape(-1, 28, 28, 1)
+X_test = X_test.reshape(-1, 28, 28, 1)
 
-X = X / 255.0
-X = X.reshape(-1, 28, 28, 1)
-
-X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=0.2,random_state=42,stratify=y)
+print("Building CNN model...")
 
 model = build_cnn_model()
 
-print("Training combined CNN...")
+print("Training CNN ByClass model...")
 model.fit(X_train,y_train,epochs=10,batch_size=128,validation_data=(X_test, y_test))
 loss, accuracy = model.evaluate(X_test, y_test)
 print("Combined CNN accuracy:", accuracy)
 
-model.save("trained_models/cnn_combined_model.keras")
-print("Saved as trained_models/cnn_combined_model.keras")
+model.save(MODEL_SAVE_PATH)
+print(f"Saved as {MODEL_SAVE_PATH}")
