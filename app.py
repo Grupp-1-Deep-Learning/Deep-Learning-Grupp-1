@@ -222,19 +222,29 @@ def predict_single_model(model_name, pixels):
     if model is None:
         return f"Modellen {model_name} kunde inte laddas.", None, None, None
     
+    result_text = ""
+    options = []
+    
     # Speciell hantering för XGBoost-lettermodellen för att visa topp 3 gissningar, baserat på confidence 
     if model_name == "xgboost_lettermodel.json" and hasattr(model, "predict_proba"):
         probs = model.predict_proba(pixels)[0]
         top_3_indices = np.argsort(probs)[-3:][::-1]
         
-        result_text = ""
-        options = []
         for i in top_3_indices:
             confidence = probs[i] * 100
-            display_prediction = chr(int(i) + 65)
-            result_text += f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%\n\n"
+            if confidence >= 20.0:
+                display_prediction = chr(int(i) + 65)
+                result_text += f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%\n\n"
+                options.append(display_prediction)
+                
+        if not options:
+            best_idx = top_3_indices[0]
+            confidence = probs[best_idx] * 100
+            display_prediction = chr(int(best_idx) + 65)
+            result_text = f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%\n\n"
             options.append(display_prediction)
             
+        while len(options) < 3: options.append("")
         return result_text.strip(), options[0], options[1], options[2]
     
     if model_name.endswith(".keras"):
@@ -255,47 +265,39 @@ def predict_single_model(model_name, pixels):
         # Snabbt spår för swe_chars_model.keras
         if "swe_chars" in model_name:
             swe_mapping = {0: 'Å', 1: 'Ä', 2: 'Ö', 3: 'å', 4: 'ä', 5: 'ö', 6: 'null'}
-            mapping_to_use = swe_mapping
+            best_idx = np.argmax(probs)
+            best_char = swe_mapping.get(int(best_idx), str(best_idx))
 
-            if mapping_to_use:
-                best_idx = np.argmax(probs)
-                best_char = mapping_to_use.get(int(best_idx), str(best_idx))
-                
-                if best_char.lower() == "null":
-                    conf = probs[best_idx] * 100
-                    return f"{model_name} gissar: null\nSäkerhet: {conf:.1f}%", None, None, None
-                
-                top_indices = np.argsort(probs)[::-1]
-                valid_options = []
-                result_text = ""
-                
+            if best_char.lower() == "null":
+                conf = probs[best_idx] * 100
+                return f"{model_name} gissar: null\nSäkerhet: {conf:.1f}%", None, None, None
+
+            top_indices = np.argsort(probs)[::-1]
+            for idx in top_indices:
+                char = swe_mapping.get(int(idx), str(idx))
+                if char.lower() != "null":
+                    conf = probs[idx] * 100
+                    if conf >= 20.0:
+                        result_text += f"{model_name} gissar: {char}\nSäkerhet: {conf:.1f}%\n\n"
+                        options.append(char)
+
+            if not options:
                 for idx in top_indices:
-                    char = mapping_to_use.get(int(idx), str(idx))
+                    char = swe_mapping.get(int(idx), str(idx))
                     if char.lower() != "null":
                         conf = probs[idx] * 100
-                        if idx == best_idx or conf >= 20.0:
-                            result_text += f"{model_name} gissar: {char}\nSäkerhet: {conf:.1f}%\n\n"
-                            valid_options.append(char)
-                
-                while len(valid_options) < 3:
-                    valid_options.append(None)
-                    
-                return result_text.strip(), valid_options[0], valid_options[1], valid_options[2]
-            else:
-                prediction = np.argmax(probs)
-                confidence = probs[prediction] * 100
-                display_prediction = str(prediction)
-                return f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%", None, None, None
+                        result_text = f"{model_name} gissar: {char}\nSäkerhet: {conf:.1f}%\n\n"
+                        options.append(char)
+                        break
+
+            while len(options) < 3: options.append("")
+            return result_text.strip(), options[0], options[1], options[2]
 
         # Speciell hantering för CNN Combined och ANN för att visa topp 3 gissningar
-        if model_name == "cnn_combined_model.keras" or model_name == "ann_model.keras" or "cnn" in model_name:
-            top_3_indices = np.argsort(probs)[-3:][::-1]
-            
-            result_text = ""
-            options = []
-            for i in top_3_indices:
-                confidence = probs[i] * 100
-                
+        top_3_indices = np.argsort(probs)[-3:][::-1]
+        for i in top_3_indices:
+            confidence = probs[i] * 100
+            if confidence >= 20.0:
                 if "digit" in model_name:
                     display_prediction = str(i)
                 elif "letter" in model_name:
@@ -316,13 +318,31 @@ def predict_single_model(model_name, pixels):
                 result_text += f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%\n\n"
                 options.append(display_prediction)
                 
-            while len(options) < 3:
-                options.append("")
-                
-            return result_text.strip(), options[0], options[1], options[2]
+        if not options:
+            best_idx = top_3_indices[0]
+            confidence = probs[best_idx] * 100
+            i = best_idx
+            if "digit" in model_name:
+                display_prediction = str(i)
+            elif "letter" in model_name:
+                display_prediction = chr(int(i) + 65)
+            elif model_name == "ann_model.keras" or model_name == "cnn_combined_model.keras":
+                if i <= 9:
+                    display_prediction = str(i)
+                elif i <= 35:
+                    display_prediction = chr(i - 10 + ord("A"))
+                else:  # 36-61 → lowercase
+                    display_prediction = chr(i - 36 + ord("a"))
+            else:
+                if i <= 9:
+                    display_prediction = str(i)
+                else:
+                    display_prediction = chr(i - 10 + 65)
+            result_text = f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%\n\n"
+            options.append(display_prediction)
 
-        prediction = np.argmax(probs)
-        confidence = probs[prediction] * 100
+        while len(options) < 3: options.append("")
+        return result_text.strip(), options[0], options[1], options[2]
 
     else:
         prediction = model.predict(pixels)[0]
@@ -332,22 +352,15 @@ def predict_single_model(model_name, pixels):
             probs = model.predict_proba(pixels)[0]
             confidence = probs[int(prediction)] * 100  
 
-    if model_name == "ann_model.keras" or model_name == "cnn_combined_model.keras":
-        if prediction <= 9:
-            display_prediction = str(prediction)
-        elif prediction <= 35:
-            display_prediction = chr(prediction - 10 + ord("A"))
-        else:
-            display_prediction = chr(prediction - 36 + ord("a"))
-    elif "letter" in model_name.lower():
+    if "letter" in model_name.lower():
         display_prediction = chr(int(prediction) + 65)
     else:
         display_prediction = str(prediction)
 
     if confidence is not None:
-        return f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%", None, None, None
+        return f"{model_name} gissar: {display_prediction}\nSäkerhet: {confidence:.1f}%", display_prediction, "", ""
 
-    return f"{model_name} gissar: {display_prediction}", None, None, None
+    return f"{model_name} gissar: {display_prediction}", display_prediction, "", ""
 
 
 def extract_prediction(result_text):
@@ -391,13 +404,15 @@ def predict_all_models(img_28_digit, img_28_letter):
     if "swe_chars_model.keras" in loaded_models:
         pixels = np.array(img_28_digit).reshape(1, 784)
         res_txt, o1, o2, o3 = predict_single_model("swe_chars_model.keras", pixels)
-        pred = extract_prediction(res_txt)
-        if pred and pred.lower() != "null":
-            summary = "🧠 Sammanvägt resultat\n"
-            summary += f"Slutlig gissning (Swe Chars): {pred}\n\n"
-            summary += "--- Endast Swe Chars Modell ---\n\n"
-            summary += res_txt
-            return summary, o1, o2, o3
+        
+        if res_txt:
+            pred = extract_prediction(res_txt)
+            if pred and pred.lower() != "null":
+                summary = "🧠 Sammanvägt resultat\n"
+                summary += f"Slutlig gissning (Swe Chars): {pred}\n\n"
+                summary += "--- Endast Swe Chars Modell ---\n\n"
+                summary += res_txt
+                return summary, o1, o2, o3
 
     all_texts = []
     votes = []
@@ -416,15 +431,19 @@ def predict_all_models(img_28_digit, img_28_letter):
         else:
             pixels = np.array(img_28_digit).reshape(1, 784)
 
-        result_text, _, _, _ = predict_single_model(model_name, pixels)
+        result_text, o1, o2, o3 = predict_single_model(model_name, pixels)
 
         all_texts.append(result_text)
+        
+        opts = [o for o in (o1, o2, o3) if o]
+        
+        if not opts:
+            continue
 
-        prediction = extract_prediction(result_text)
+        prediction = opts[0]
 
         if prediction is not None and prediction.lower() != "null":
             group = get_model_group(model_name)
-
             accuracy = MODEL_ACCURACY.get(model_name, 90)
 
             if group == "letter":
@@ -445,14 +464,15 @@ def predict_all_models(img_28_digit, img_28_letter):
 
             normalized_score = (accuracy / group_size) * group_boost
 
-            votes.append(prediction)
-
-            weighted_scores[prediction] = (
-                weighted_scores.get(prediction, 0) + normalized_score
-            )
+            for i, opt in enumerate(opts):
+                if opt.lower() == "null": continue
+                weight_multiplier = 1.0 if i == 0 else (0.5 if i == 1 else 0.25)
+                score = normalized_score * weight_multiplier
+                votes.append(opt)
+                weighted_scores[opt] = weighted_scores.get(opt, 0) + score
 
     if not votes:
-        return "\n\n".join(all_texts), None, None, None
+        return "\n\n".join(all_texts) if all_texts else "Inga gissningar kunde göras.", None, None, None
 
     vote_count = Counter(votes)
 
@@ -484,20 +504,28 @@ def predict_all_models(img_28_digit, img_28_letter):
 
     summary += "\n📊 Alla röster:\n"
 
-    for prediction, count in vote_count.most_common():
+    for prediction_key, count in vote_count.most_common():
         summary += (
-            f"{prediction}: "
+            f"{prediction_key}: "
             f"{count} röst(er), "
-            f"score {weighted_scores[prediction]:.1f}\n"
+            f"score {weighted_scores[prediction_key]:.1f}\n"
         )
 
     summary += "\n--- Alla modeller ---\n\n"
     summary += "\n\n".join(all_texts)
 
-    sorted_options = sorted(weighted_scores.keys(), key=lambda x: weighted_scores[x], reverse=True)
-    opt1 = sorted_options[0] if len(sorted_options) > 0 else None
-    opt2 = sorted_options[1] if len(sorted_options) > 1 else None
-    opt3 = sorted_options[2] if len(sorted_options) > 2 else None
+    # Filtrera alternativen så att siffror måste ha minst 3 röster för att vara med
+    valid_options = []
+    for opt in sorted(weighted_scores.keys(), key=lambda x: weighted_scores[x], reverse=True):
+        if is_digit_prediction(opt):
+            if vote_count[opt] >= 3:
+                valid_options.append(opt)
+        else:
+            valid_options.append(opt)
+
+    opt1 = valid_options[0] if len(valid_options) > 0 else None
+    opt2 = valid_options[1] if len(valid_options) > 1 else None
+    opt3 = valid_options[2] if len(valid_options) > 2 else None
 
     return summary, opt1, opt2, opt3
 
